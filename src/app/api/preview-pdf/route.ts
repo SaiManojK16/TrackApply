@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'LaTeX content is required' }, { status: 400 });
     }
 
-    // Create temp directory
-    const tempDir = path.join(process.cwd(), 'temp');
+    // Use /tmp for temp directory in serverless
+    const tempDir = '/tmp';
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     // Compile LaTeX to PDF
     try {
-      await execAsync(`pdflatex -output-directory="${tempDir}" "${texFilePath}"`);
+      await execAsync(`pdflatex -output-directory=${tempDir} ${texFilePath}`);
       
       // Check if PDF was created
       if (!fs.existsSync(pdfFilePath)) {

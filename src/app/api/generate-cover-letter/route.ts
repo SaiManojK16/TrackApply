@@ -229,20 +229,17 @@ ${resumeContent}`;
     const result = await model.generateContent(prompt);
     let aiContent;
     
-    console.log('Raw AI response:', result.response.text());
-    
+    const rawText = result.response.text();
+    console.log('Raw AI response:', rawText);
     // Attempt to parse the AI's response as JSON
     try {
-      aiContent = JSON.parse(result.response.text());
+      // Remove all code block markers and trim whitespace
+      let jsonText = rawText.replace(/```json|```/g, '').trim();
+      aiContent = JSON.parse(jsonText);
     } catch (e) {
       console.error('JSON parse error:', e);
       // If parsing fails, try to extract JSON from the response text
-      let jsonText = result.response.text();
-      
-      // Remove markdown code blocks if present
-      jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
-      jsonText = jsonText.replace(/```\s*/g, '').replace(/```\s*$/g, '');
-      
+      let jsonText = rawText.replace(/```json|```/g, '').trim();
       // Try to find JSON object in the cleaned text
       const match = jsonText.match(/\{[\s\S]*\}/);
       if (match) {
@@ -250,6 +247,7 @@ ${resumeContent}`;
           aiContent = JSON.parse(match[0]);
         } catch (parseError) {
           console.error('Failed to parse extracted JSON:', parseError);
+          console.error('Full AI response:', rawText);
           // Fallback to default cover letter body
           aiContent = {
             BodyParagraphs: "I am reaching out to express interest in the position at your company. With a foundation in software engineering and product-focused thinking, I aim to contribute both technical depth and collaborative energy to your organization.\\\\\\\\\\n\\nIn my recent projects, I have worked on relevant projects and technical skills and actively participated in areas such as teamwork, problem-solving, and technical expertise. I am particularly impressed by the company's innovative approach and growth opportunities, and I'm eager to be part of its growth.\\\\\\\\\\n\\nPlease find my resume attached. I would be glad to discuss further how I can support your company's goals."
@@ -257,6 +255,7 @@ ${resumeContent}`;
         }
       } else {
         console.error('No JSON found in AI response');
+        console.error('Full AI response:', rawText);
         aiContent = {
           BodyParagraphs: "I am reaching out to express interest in the position at your company. With a foundation in software engineering and product-focused thinking, I aim to contribute both technical depth and collaborative energy to your organization.\\\\\\\\\\n\\nIn my recent projects, I have worked on relevant projects and technical skills and actively participated in areas such as teamwork, problem-solving, and technical expertise. I am particularly impressed by the company's innovative approach and growth opportunities, and I'm eager to be part of its growth.\\\\\\\\\\n\\nPlease find my resume attached. I would be glad to discuss further how I can support your company's goals."
         };
