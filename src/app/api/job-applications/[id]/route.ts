@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateToken } from '@/middleware/auth';
 import dbConnect from '@/lib/mongodb';
 import JobApplication from '@/models/JobApplication';
+import mongoose from 'mongoose';
 
 export async function GET(
   request: NextRequest,
@@ -16,6 +17,11 @@ export async function GET(
 
     await dbConnect();
     const { id } = await params;
+
+    // Validate ID format
+    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid job application ID' }, { status: 400 });
+    }
 
     const application = await JobApplication.findOne({
       _id: id,
@@ -48,6 +54,11 @@ export async function PUT(
 
     await dbConnect();
     const { id } = await params;
+
+    // Validate ID format
+    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid job application ID' }, { status: 400 });
+    }
 
     const application = await JobApplication.findOneAndUpdate(
       {
@@ -85,6 +96,11 @@ export async function DELETE(
 
     await dbConnect();
     const { id } = await params;
+
+    // Validate ID format
+    if (!id || id === 'undefined' || !mongoose.Types.ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid job application ID' }, { status: 400 });
+    }
 
     const application = await JobApplication.findOneAndDelete({
       _id: id,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateToken } from '@/middleware/auth';
 import dbConnect from '@/lib/mongodb';
+import User from '@/models/User';
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,6 +9,10 @@ export async function GET(request: NextRequest) {
     
     if ('error' in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+
+    if (!authResult.user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     return NextResponse.json({ user: authResult.user.getProfile() });
@@ -25,22 +30,32 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
+    if (!authResult.user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
     const { fullName, phone, linkedin, github, portfolio } = await request.json();
 
     await dbConnect();
 
-    // Update user fields
-    if (fullName) authResult.user.fullName = fullName;
-    if (phone !== undefined) authResult.user.phone = phone;
-    if (linkedin !== undefined) authResult.user.linkedin = linkedin;
-    if (github !== undefined) authResult.user.github = github;
-    if (portfolio !== undefined) authResult.user.portfolio = portfolio;
+    // Fetch fresh user data from database
+    const user = await User.findById(authResult.user._id);
+    if (!user) {
+      return NextResponse.json({ error: 'User not found in database' }, { status: 404 });
+    }
 
-    await authResult.user.save();
+    // Update user fields
+    if (fullName) user.fullName = fullName;
+    if (phone !== undefined) user.phone = phone;
+    if (linkedin !== undefined) user.linkedin = linkedin;
+    if (github !== undefined) user.github = github;
+    if (portfolio !== undefined) user.portfolio = portfolio;
+
+    await user.save();
 
     return NextResponse.json({
       message: 'Profile updated successfully',
-      user: authResult.user.getProfile()
+      user: user.getProfile()
     });
   } catch (error) {
     console.error('Profile update error:', error);

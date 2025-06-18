@@ -7,6 +7,10 @@ function hasUser(result: any): result is { user: any } {
   return result && typeof result === 'object' && 'user' in result;
 }
 
+function hasError(result: any): result is { error: string } {
+  return result && typeof result === 'object' && 'error' in result;
+}
+
 export async function GET(request: NextRequest) {
   try {
     console.log('GET /api/job-applications - Starting request');
@@ -14,9 +18,9 @@ export async function GET(request: NextRequest) {
     const authResult = await authenticateToken(request);
     console.log('Authentication result:', authResult);
     
-    if (authResult instanceof NextResponse) {
-      console.log('Authentication returned NextResponse');
-      return authResult;
+    if (hasError(authResult)) {
+      console.log('Authentication failed:', authResult.error);
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
     
     if (!hasUser(authResult)) {
@@ -52,9 +56,9 @@ export async function POST(request: NextRequest) {
     const authResult = await authenticateToken(request);
     console.log('Authentication result:', authResult);
     
-    if (authResult instanceof NextResponse) {
-      console.log('Authentication returned NextResponse');
-      return authResult;
+    if (hasError(authResult)) {
+      console.log('Authentication failed:', authResult.error);
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
     
     if (!hasUser(authResult)) {
