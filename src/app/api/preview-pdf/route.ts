@@ -1,0 +1,94 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
+
+const execAsync = promisify(exec);
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const latexContent = searchParams.get('latex');
+
+    if (!latexContent) {
+      return NextResponse.json({ error: 'LaTeX content is required' }, { status: 400 });
+    }
+
+    // Create temp directory
+    const tempDir = path.join(process.cwd(), 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const timestamp = Date.now();
+    const baseFilename = `preview-${timestamp}`;
+    const texFilePath = path.join(tempDir, `${baseFilename}.tex`);
+    const pdfFilePath = path.join(tempDir, `${baseFilename}.pdf`);
+
+    // Write LaTeX content to file
+    fs.writeFileSync(texFilePath, decodeURIComponent(latexContent));
+
+    // Compile LaTeX to PDF
+    try {
+      await execAsync(`pdflatex -output-directory="${tempDir}" "${texFilePath}"`);
+      
+      // Check if PDF was created
+      if (!fs.existsSync(pdfFilePath)) {
+        throw new Error('PDF generation failed');
+      }
+
+      // Read PDF file
+      const pdfBuffer = fs.readFileSync(pdfFilePath);
+
+      // Clean up temporary files
+      try {
+        fs.unlinkSync(texFilePath);
+        fs.unlinkSync(pdfFilePath);
+        // Also clean up auxiliary files
+        const auxFiles = ['.aux', '.log', '.out'];
+        auxFiles.forEach(ext => {
+          const auxFile = path.join(tempDir, `${baseFilename}${ext}`);
+          if (fs.existsSync(auxFile)) {
+            fs.unlinkSync(auxFile);
+          }
+        });
+      } catch (cleanupError) {
+        console.error('Error cleaning up temporary files:', cleanupError);
+      }
+
+      // Return PDF for inline display
+      return new NextResponse(pdfBuffer, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': 'inline',
+          'Content-Length': pdfBuffer.length.toString(),
+        },
+      });
+
+    } catch (pdfError) {
+      console.error('PDF preview error:', pdfError);
+      
+      // Clean up tex file on error
+      try {
+        if (fs.existsSync(texFilePath)) {
+          fs.unlinkSync(texFilePath);
+        }
+      } catch (cleanupError) {
+        console.error('Error cleaning up tex file:', cleanupError);
+      }
+
+      return NextResponse.json({
+        error: 'Failed to generate PDF preview. Please check your LaTeX content.',
+        details: pdfError instanceof Error ? pdfError.message : 'Unknown error'
+      }, { status: 500 });
+    }
+
+  } catch (error) {
+    console.error('Error in PDF preview:', error);
+    return NextResponse.json({
+      error: 'Failed to generate PDF preview',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
+  }
+} 
