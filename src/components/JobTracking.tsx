@@ -54,6 +54,46 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 
+interface JobApplication {
+  _id: string;
+  jobTitle: string;
+  companyName: string;
+  jobDescription: string;
+  applicationStatus: string;
+  applicationDate: string;
+  interviewDate?: string;
+  notes?: string;
+  location?: string;
+  contactEmail?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface User {
+  _id: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  linkedin?: string;
+  github?: string;
+  portfolio?: string;
+}
+
+interface JobTrackingProps {
+  user: User;
+}
+
+interface FormData {
+  jobTitle: string;
+  companyName: string;
+  jobDescription: string;
+  applicationStatus: string;
+  interviewDate: string;
+  notes: string;
+  location: string;
+  contactEmail: string;
+}
+
 const statusColors = {
   'Applied': { color: 'info', bgColor: '#e3f2fd', textColor: '#1976d2' },
   'Rejected': { color: 'error', bgColor: '#ffebee', textColor: '#d32f2f' },
@@ -73,27 +113,27 @@ const statusColors = {
 // Main filter statuses (only show these 4 in the filter dropdown)
 const mainFilterStatuses = ['Applied', 'Rejected', 'Interview Scheduled', 'Interview Completed'];
 
-const JobTracking = ({ user }) => {
-  const [applications, setApplications] = useState([]);
+const JobTracking: React.FC<JobTrackingProps> = ({ user }) => {
+  const [applications, setApplications] = useState<JobApplication[]>([]);
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
-  const [editingApplication, setEditingApplication] = useState(null);
-  const [viewingApplication, setViewingApplication] = useState(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [editingApplication, setEditingApplication] = useState<JobApplication | null>(null);
+  const [viewingApplication, setViewingApplication] = useState<JobApplication | null>(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
   const [statusFilter, setStatusFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [expandedRows, setExpandedRows] = useState(new Set<string>());
   
   // Email generation state
   const [emailDialog, setEmailDialog] = useState(false);
-  const [emailData, setEmailData] = useState(null);
+  const [emailData, setEmailData] = useState<any>(null);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailFormData, setEmailFormData] = useState({
     hiringManagerName: '',
     hiringManagerEmail: ''
   });
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     jobTitle: '',
     companyName: '',
     jobDescription: '',
@@ -114,11 +154,11 @@ const JobTracking = ({ user }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5001/api/job-applications', {
+      const response = await axios.get('/api/job-applications', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setApplications(response.data.applications);
-    } catch (error) {
+    } catch (error: any) {
       setSnackbar({
         open: true,
         message: 'Failed to fetch applications',
@@ -129,26 +169,26 @@ const JobTracking = ({ user }) => {
     }
   };
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
 
       if (editingApplication) {
-        await axios.put(`http://localhost:5001/api/job-applications/${editingApplication.id}`, formData, { headers });
+        await axios.put(`/api/job-applications/${editingApplication._id}`, formData, { headers });
         setSnackbar({
           open: true,
           message: 'Application updated successfully!',
           severity: 'success'
         });
       } else {
-        await axios.post('http://localhost:5001/api/job-applications', formData, { headers });
+        await axios.post('/api/job-applications', formData, { headers });
         setSnackbar({
           open: true,
           message: 'Application added successfully!',
@@ -158,7 +198,7 @@ const JobTracking = ({ user }) => {
 
       handleCloseDialog();
       fetchApplications();
-    } catch (error) {
+    } catch (error: any) {
       setSnackbar({
         open: true,
         message: error.response?.data?.error || 'Failed to save application',
@@ -167,7 +207,7 @@ const JobTracking = ({ user }) => {
     }
   };
 
-  const handleEdit = (application) => {
+  const handleEdit = (application: JobApplication) => {
     setEditingApplication(application);
     setFormData({
       jobTitle: application.jobTitle,
@@ -182,15 +222,15 @@ const JobTracking = ({ user }) => {
     setOpenDialog(true);
   };
 
-  const handleView = (application) => {
+  const handleView = (application: JobApplication) => {
     setViewingApplication(application);
   };
 
-  const handleDelete = async (applicationId) => {
+  const handleDelete = async (applicationId: string) => {
     if (window.confirm('Are you sure you want to delete this application?')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`http://localhost:5001/api/job-applications/${applicationId}`, {
+        await axios.delete(`/api/job-applications/${applicationId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setSnackbar({
@@ -199,7 +239,7 @@ const JobTracking = ({ user }) => {
           severity: 'success'
         });
         fetchApplications();
-      } catch (error) {
+      } catch (error: any) {
         setSnackbar({
           open: true,
           message: 'Failed to delete application',
@@ -209,7 +249,7 @@ const JobTracking = ({ user }) => {
     }
   };
 
-  const handleGenerateEmail = async (application) => {
+  const handleGenerateEmail = async (application: JobApplication) => {
     try {
       setEmailLoading(true);
       setEmailFormData({
@@ -219,7 +259,7 @@ const JobTracking = ({ user }) => {
       setEmailDialog(true);
 
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:5001/api/generate-email', {
+      const response = await axios.post('/api/generate-email', {
         jobTitle: application.jobTitle,
         companyName: application.companyName,
         jobDescription: application.jobDescription,
@@ -233,7 +273,7 @@ const JobTracking = ({ user }) => {
         ...response.data,
         application: application
       });
-    } catch (error) {
+    } catch (error: any) {
       setSnackbar({
         open: true,
         message: error.response?.data?.error || 'Failed to generate email',
@@ -245,7 +285,7 @@ const JobTracking = ({ user }) => {
     }
   };
 
-  const handleEmailFormChange = (e) => {
+  const handleEmailFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setEmailFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -577,57 +617,56 @@ const JobTracking = ({ user }) => {
                    </TableRow>
                  ) : (
                   filteredApplications.map((application, index) => (
-                    <React.Fragment key={application.id}>
-                      <TableRow 
-                        sx={{ 
-                          '&:hover': { 
-                            backgroundColor: '#f8fafc',
-                          },
-                          borderBottom: '1px solid #f1f5f9',
-                          cursor: 'pointer'
+                    <React.Fragment key={application._id}>
+                      <TableRow
+                        hover
+                        onClick={() => toggleRowExpansion(application._id)}
+                        sx={{
+                          cursor: 'pointer',
+                          '&:hover': {
+                            backgroundColor: '#f8fafc'
+                          }
                         }}
-                        onClick={() => toggleRowExpansion(application.id)}
                       >
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
+                        <TableCell sx={{ py: 2 }}>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <IconButton size="small" sx={{ p: 0.5 }}>
-                              {expandedRows.has(application.id) ? 
-                                <ExpandLessIcon sx={{ fontSize: 16 }} /> : 
-                                <ExpandMoreIcon sx={{ fontSize: 16 }} />
-                              }
-                            </IconButton>
-                            <Typography variant="body2" sx={{ fontWeight: 500, color: '#1e293b' }}>
-                              {application.companyName}
+                            {expandedRows.has(application._id) ?
+                              <ExpandLessIcon sx={{ fontSize: 16, color: '#64748b' }} /> :
+                              <ExpandMoreIcon sx={{ fontSize: 16, color: '#64748b' }} />
+                            }
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {application.jobTitle}
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
-                          <Typography variant="body2" sx={{ color: '#64748b' }}>
-                            {application.jobTitle}
+                        <TableCell sx={{ py: 2 }}>
+                          <Typography variant="body2">
+                            {application.companyName}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
+                        <TableCell sx={{ py: 2 }}>
                           <Chip
                             label={application.applicationStatus}
                             size="small"
                             sx={{
-                              backgroundColor: statusColors[application.applicationStatus]?.bgColor || '#f1f5f9',
-                              color: statusColors[application.applicationStatus]?.textColor || '#64748b',
+                              backgroundColor: statusColors[application.applicationStatus as keyof typeof statusColors]?.bgColor || '#f1f5f9',
+                              color: statusColors[application.applicationStatus as keyof typeof statusColors]?.textColor || '#64748b',
                               fontWeight: 500,
-                              fontSize: '0.75rem',
-                              height: 24,
-                              '& .MuiChip-label': {
-                                px: 1.5
-                              }
+                              fontSize: '0.75rem'
                             }}
                           />
                         </TableCell>
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
-                          <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.75rem' }}>
-                            {formatTime(application.updatedAt || application.applicationDate)} {formatDate(application.updatedAt || application.applicationDate)}
+                        <TableCell sx={{ py: 2 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {formatDate(application.applicationDate)}
                           </Typography>
                         </TableCell>
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
+                        <TableCell sx={{ py: 2 }}>
+                          <Typography variant="body2" color="text.secondary">
+                            {application.interviewDate ? formatDate(application.interviewDate) : '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={{ py: 2, borderBottom: expandedRows.has(application._id) ? '1px solid #e2e8f0' : 'none' }}>
                           <Box sx={{ display: 'flex', gap: 0.5 }}>
                             <IconButton 
                               size="small"
@@ -665,72 +704,52 @@ const JobTracking = ({ user }) => {
                               size="small"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleGenerateEmail(application);
+                                handleDelete(application._id);
                               }}
                               sx={{ 
                                 color: '#64748b',
                                 '&:hover': {
                                   backgroundColor: '#f1f5f9',
-                                  color: '#10b981'
+                                  color: '#ef4444'
                                 }
                               }}
                             >
-                              <EmailIcon sx={{ fontSize: 16 }} />
+                              <DeleteIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                           </Box>
                         </TableCell>
                       </TableRow>
-                      
-                                             {/* Expandable Row Content */}
-                       <TableRow>
-                         <TableCell 
-                           colSpan={5} 
-                           sx={{ 
-                             py: 0, 
-                             borderBottom: expandedRows.has(application.id) ? '1px solid #e2e8f0' : 'none',
-                             backgroundColor: '#fafbfc'
-                           }}
-                         >
-                          <Collapse in={expandedRows.has(application.id)} timeout="auto" unmountOnExit>
-                            <Box sx={{ p: 3 }}>
+                      <TableRow>
+                        <TableCell colSpan={6} sx={{ py: 0, borderBottom: 'none' }}>
+                          <Collapse in={expandedRows.has(application._id)} timeout="auto" unmountOnExit>
+                            <Box sx={{ p: 3, backgroundColor: '#f8fafc' }}>
                               <Grid container spacing={3}>
-                                <Grid item xs={12} md={6}>
+                                <Grid item xs={12} md={8}>
                                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#1e293b' }}>
                                     Job Description
                                   </Typography>
-                                  <Typography variant="body2" sx={{ color: '#64748b', mb: 2 }}>
-                                    {application.jobDescription || 'No description available'}
-                                  </Typography>
-                                  
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#1e293b' }}>
-                                    Notes
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                    {application.notes || 'No notes added'}
+                                  <Typography variant="body2" sx={{ color: '#64748b', lineHeight: 1.6 }}>
+                                    {application.jobDescription || 'No description provided'}
                                   </Typography>
                                 </Grid>
-                                
-                                <Grid item xs={12} md={6}>
+                                <Grid item xs={12} md={4}>
                                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#1e293b' }}>
-                                    Application Details
+                                    Additional Details
                                   </Typography>
-                                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                    <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                      <strong>Applied:</strong> {formatDate(application.applicationDate)}
-                                    </Typography>
+                                  <Box sx={{ spaceY: 1 }}>
                                     {application.location && (
-                                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                        <strong>Location:</strong> {application.location}
+                                      <Typography variant="body2" sx={{ color: '#64748b', mb: 0.5 }}>
+                                        📍 {application.location}
                                       </Typography>
                                     )}
                                     {application.contactEmail && (
-                                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                        <strong>Contact:</strong> {application.contactEmail}
+                                      <Typography variant="body2" sx={{ color: '#64748b', mb: 0.5 }}>
+                                        📧 {application.contactEmail}
                                       </Typography>
                                     )}
-                                    {application.interviewDate && (
-                                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                        <strong>Interview:</strong> {formatDate(application.interviewDate)}
+                                    {application.notes && (
+                                      <Typography variant="body2" sx={{ color: '#64748b', mb: 0.5 }}>
+                                        📝 {application.notes}
                                       </Typography>
                                     )}
                                   </Box>
@@ -774,7 +793,7 @@ const JobTracking = ({ user }) => {
                                         }
                                       }}
                                     >
-                                      Email
+                                      Generate Email
                                     </Button>
                                     <Button
                                       size="small"
@@ -782,7 +801,7 @@ const JobTracking = ({ user }) => {
                                       startIcon={<DeleteIcon />}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleDelete(application.id);
+                                        handleDelete(application._id);
                                       }}
                                       sx={{
                                         textTransform: 'none',

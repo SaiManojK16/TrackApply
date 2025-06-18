@@ -9,15 +9,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'LaTeX content is required' }, { status: 400 });
     }
 
-    // Safely decode the URI component
+    // Safely decode the URI component with multiple attempts
     let decodedLatex: string;
     try {
+      // First, try to decode normally
       decodedLatex = decodeURIComponent(latexContent);
     } catch (decodeError) {
-      console.error('URI decode error:', decodeError);
+      console.error('First decode attempt failed:', decodeError);
+      try {
+        // Try with unescape first
+        const unescaped = unescape(latexContent);
+        decodedLatex = decodeURIComponent(unescaped);
+      } catch (secondError) {
+        console.error('Second decode attempt failed:', secondError);
+        try {
+          // Try with a more lenient approach
+          decodedLatex = latexContent.replace(/\+/g, ' ').replace(/%20/g, ' ');
+        } catch (finalError) {
+          console.error('All decode attempts failed:', finalError);
+          return NextResponse.json({ 
+            error: 'Invalid LaTeX content encoding',
+            details: 'The LaTeX content contains invalid characters that cannot be decoded'
+          }, { status: 400 });
+        }
+      }
+    }
+
+    // Validate that we have some content
+    if (!decodedLatex || decodedLatex.trim().length === 0) {
       return NextResponse.json({ 
-        error: 'Invalid LaTeX content encoding',
-        details: 'The LaTeX content contains invalid characters'
+        error: 'Empty LaTeX content',
+        details: 'The decoded LaTeX content is empty'
       }, { status: 400 });
     }
 
@@ -42,19 +64,24 @@ export async function GET(request: NextRequest) {
 
 // Helper function to extract text content from LaTeX
 function extractTextFromLatex(latexContent: string): string {
-  // Remove LaTeX commands and extract plain text
-  let text = latexContent
-    // Remove LaTeX document structure
-    .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
-    .replace(/\\end\{document\}/g, '')
-    // Remove common LaTeX commands
-    .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-    .replace(/\\[a-zA-Z]+/g, '')
-    // Remove special characters
-    .replace(/[{}]/g, '')
-    // Clean up whitespace
-    .replace(/\s+/g, ' ')
-    .trim();
+  try {
+    // Remove LaTeX commands and extract plain text
+    let text = latexContent
+      // Remove LaTeX document structure
+      .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
+      .replace(/\\end\{document\}/g, '')
+      // Remove common LaTeX commands
+      .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
+      .replace(/\\[a-zA-Z]+/g, '')
+      // Remove special characters
+      .replace(/[{}]/g, '')
+      // Clean up whitespace
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  return text;
+    return text || 'No text content could be extracted';
+  } catch (error) {
+    console.error('Error extracting text from LaTeX:', error);
+    return 'Error extracting text content';
+  }
 } 

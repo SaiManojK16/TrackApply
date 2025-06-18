@@ -143,7 +143,7 @@ const JobTracking = ({ user }) => {
       const headers = { Authorization: `Bearer ${token}` };
 
       if (editingApplication) {
-        await axios.put(`/api/job-applications/${editingApplication.id}`, formData, { headers });
+        await axios.put(`/api/job-applications/${editingApplication._id}`, formData, { headers });
         setSnackbar({
           open: true,
           message: 'Application updated successfully!',
@@ -785,7 +785,7 @@ const JobTracking = ({ user }) => {
                                       startIcon={<DeleteIcon />}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleDelete(application.id);
+                                        handleDelete(application._id);
                                       }}
                                       sx={{
                                         textTransform: 'none',
