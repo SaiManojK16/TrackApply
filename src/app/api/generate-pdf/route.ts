@@ -32,14 +32,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create temp directory
-    const tempDir = path.join(process.cwd(), 'temp');
+    // Use /tmp for temp directory in serverless
+    const tempDir = '/tmp';
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
     const timestamp = Date.now();
-    const baseFilename = filename || `cover-letter-${timestamp}`;
+    const uniqueId = Math.random().toString(36).substring(2, 15);
+    const baseFilename = filename || `cover-letter-${timestamp}-${uniqueId}`;
     const texFilePath = path.join(tempDir, `${baseFilename}.tex`);
     const pdfFilePath = path.join(tempDir, `${baseFilename}.pdf`);
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     // Compile LaTeX to PDF
     try {
-      await execAsync(`pdflatex -output-directory="${tempDir}" "${texFilePath}"`);
+      await execAsync(`pdflatex -interaction=nonstopmode -output-directory="${tempDir}" "${texFilePath}"`);
       
       // Check if PDF was created
       if (!fs.existsSync(pdfFilePath)) {

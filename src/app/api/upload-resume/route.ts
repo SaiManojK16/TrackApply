@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    const file = formData.get('resume') as File;
+    const file = formData.get('file') as File;
 
     if (!file) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
@@ -28,24 +28,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only PDF files are allowed' }, { status: 400 });
     }
 
-    // Validate file size (10MB limit)
-    if (file.size > 10 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File size must be less than 10MB' }, { status: 400 });
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 });
     }
 
     await dbConnect();
 
-    // Create temp directory
-    const tempDir = path.join(process.cwd(), 'temp');
+    // Use /tmp for temp directory in serverless
+    const tempDir = '/tmp';
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
 
     const timestamp = Date.now();
-    const filename = `resume-${timestamp}.pdf`;
-    const filePath = path.join(tempDir, filename);
+    const uniqueId = Math.random().toString(36).substring(2, 15);
+    const filePath = path.join(tempDir, `resume-${timestamp}-${uniqueId}.pdf`);
 
-    // Save file temporarily
+    // Convert file to buffer and save
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     fs.writeFileSync(filePath, buffer);
