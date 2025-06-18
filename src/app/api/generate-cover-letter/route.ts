@@ -98,22 +98,45 @@ export async function POST(request: NextRequest) {
   try {
     await dbConnect();
 
-    // Parse form data for file uploads
-    const formData = await request.formData();
+    // Check content type to determine how to parse the request
+    const contentType = request.headers.get('content-type') || '';
     
-    // Extract data from form
-    const fullName = formData.get('fullName') as string;
-    const email = formData.get('email') as string;
-    const phone = formData.get('phone') as string;
-    const linkedin = formData.get('linkedin') as string;
-    const github = formData.get('github') as string;
-    const portfolio = formData.get('portfolio') as string;
-    const companyName = formData.get('companyName') as string;
-    const jobTitle = formData.get('jobTitle') as string;
-    const jobDescription = formData.get('jobDescription') as string;
-    const userInstructions = formData.get('userInstructions') as string;
-    const resumeText = formData.get('resumeText') as string;
-    const resumeFile = formData.get('resume') as File | null;
+    let fullName, email, phone, linkedin, github, portfolio, companyName, jobTitle, jobDescription, userInstructions, resumeText, resumeFile;
+    
+    if (contentType.includes('multipart/form-data')) {
+      // Parse form data for file uploads
+      const formData = await request.formData();
+      
+      // Extract data from form
+      fullName = formData.get('fullName') as string;
+      email = formData.get('email') as string;
+      phone = formData.get('phone') as string;
+      linkedin = formData.get('linkedin') as string;
+      github = formData.get('github') as string;
+      portfolio = formData.get('portfolio') as string;
+      companyName = formData.get('companyName') as string;
+      jobTitle = formData.get('jobTitle') as string;
+      jobDescription = formData.get('jobDescription') as string;
+      userInstructions = formData.get('userInstructions') as string;
+      resumeText = formData.get('resumeText') as string;
+      resumeFile = formData.get('resume') as File | null;
+    } else {
+      // Parse JSON data
+      const jsonData = await request.json();
+      
+      fullName = jsonData.fullName || jsonData.user?.fullName || '';
+      email = jsonData.email || jsonData.user?.email || '';
+      phone = jsonData.phone || jsonData.user?.phone || '';
+      linkedin = jsonData.linkedin || jsonData.user?.linkedin || '';
+      github = jsonData.github || jsonData.user?.github || '';
+      portfolio = jsonData.portfolio || jsonData.user?.portfolio || '';
+      companyName = jsonData.companyName || '';
+      jobTitle = jsonData.jobTitle || '';
+      jobDescription = jsonData.jobDescription || '';
+      userInstructions = jsonData.userInstructions || '';
+      resumeText = jsonData.resumeText || '';
+      resumeFile = null; // No file in JSON requests
+    }
 
     // Check for authentication (optional)
     let user = null;
