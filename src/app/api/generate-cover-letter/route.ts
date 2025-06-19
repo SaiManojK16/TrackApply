@@ -51,8 +51,9 @@ const latexTemplate = `
 \\documentclass[11pt,a4paper]{article}
 \\usepackage[margin=1in]{geometry}
 \\usepackage{hyperref}
-\\usepackage{fontspec}
-\\setmainfont{Times New Roman}
+\\usepackage{times}
+\\usepackage[utf8]{inputenc}
+\\usepackage[T1]{fontenc}
 
 \\begin{document}
 

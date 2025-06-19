@@ -110,16 +110,22 @@ const JobTracking = ({ user }) => {
   const theme = useTheme();
 
   useEffect(() => {
-    fetchApplications();
-  }, []);
+    if (user) {
+      fetchApplications();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
 
   const fetchApplications = async () => {
     try {
       setLoading(true);
+      console.log('Fetching applications...');
       
       // Use axios interceptor instead of manual headers
       const response = await axios.get('/api/job-applications');
-      setApplications(response.data.applications);
+      console.log('Applications fetched:', response.data.applications?.length || 0);
+      setApplications(response.data.applications || []);
     } catch (error) {
       console.error('Fetch applications error:', error);
       if (error.response?.status === 401) {
@@ -527,6 +533,26 @@ const JobTracking = ({ user }) => {
                 ))}
               </Select>
             </FormControl>
+
+            <IconButton
+              onClick={fetchApplications}
+              disabled={loading}
+              sx={{
+                color: '#64748b',
+                backgroundColor: 'white',
+                border: '1px solid #e2e8f0',
+                '&:hover': {
+                  backgroundColor: '#f1f5f9',
+                  color: '#3b82f6',
+                },
+                '&:disabled': {
+                  backgroundColor: '#f8fafc',
+                  color: '#cbd5e1',
+                }
+              }}
+            >
+              <RefreshIcon />
+            </IconButton>
           </Box>
           
           <Button

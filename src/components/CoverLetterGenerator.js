@@ -268,6 +268,12 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
 
       console.log('Cleaned text:', text.substring(0, 200) + '...');
 
+      // Check if text is empty after cleaning
+      if (!text || text.trim() === '') {
+        console.error('No text content found after LaTeX cleaning');
+        return null;
+      }
+
       // Create PDF with proper formatting
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
