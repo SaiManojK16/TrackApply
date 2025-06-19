@@ -240,13 +240,20 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
   // Function to convert LaTeX content to PDF
   const generatePDFFromLatex = (latexContent) => {
     try {
-      // Extract text content from LaTeX with better formatting
+      console.log('Generating PDF from LaTeX content');
+      
+      // Extract and clean text content from LaTeX
       let text = latexContent
+        // Remove LaTeX document structure
         .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
         .replace(/\\end\{document\}/g, '')
+        // Remove package imports
         .replace(/\\usepackage[^}]*/g, '')
+        // Remove LaTeX commands with braces
         .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
+        // Remove LaTeX commands without braces
         .replace(/\\[a-zA-Z]+/g, '')
+        // Remove special LaTeX characters
         .replace(/[{}]/g, '')
         .replace(/\\\\(?!\\)/g, '\n')
         .replace(/\\\\/g, '\n')
@@ -254,18 +261,18 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         .replace(/\\textbf\{([^}]*)\}/g, '$1')
         .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
         .replace(/\\href\{([^}]*)\}/g, '$1')
+        // Clean up whitespace
         .replace(/\s+/g, ' ')
         .replace(/\n\s*\n/g, '\n\n')
         .trim();
 
-      // Create PDF with better formatting
+      console.log('Cleaned text:', text.substring(0, 200) + '...');
+
+      // Create PDF with proper formatting
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
       const margin = 20;
       const maxWidth = pageWidth - (2 * margin);
-      
-      // Set font
-      pdf.setFont('helvetica');
       
       let yPosition = 30;
       const lineHeight = 7;
@@ -280,20 +287,25 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
           continue;
         }
         
-        // Check if this is a header line (contains "---")
-        if (line.includes('---')) {
-          yPosition += lineHeight * 2;
+        // Skip LaTeX comment lines
+        if (line.startsWith('%')) {
           continue;
         }
         
-        // Check if this is a bold line (name, subject, etc.)
-        if (line.includes('Subject:') || line.includes('Dear') || line.includes('Sincerely')) {
-          pdf.setFontSize(12);
-          pdf.setFont('helvetica', 'bold');
-        } else {
-          pdf.setFontSize(11);
-          pdf.setFont('helvetica', 'normal');
+        // Handle different line types
+        let fontSize = 11;
+        let fontStyle = 'normal';
+        
+        // Bold for headers and important lines
+        if (line.includes('Subject:') || line.includes('Dear') || line.includes('Sincerely') || 
+            line.includes('Application for') || line.includes('Position at')) {
+          fontSize = 12;
+          fontStyle = 'bold';
         }
+        
+        // Set font
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', fontStyle);
         
         // Split long lines
         const textLines = pdf.splitTextToSize(line, maxWidth);
@@ -308,7 +320,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         }
         
         // Add extra space after paragraphs
-        if (line.length > 50) {
+        if (line.length > 80) {
           yPosition += lineHeight * 0.5;
         }
       }
@@ -317,6 +329,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       const pdfBlob = pdf.output('blob');
       const pdfUrl = URL.createObjectURL(pdfBlob);
       
+      console.log('PDF generated successfully');
       return pdfUrl;
     } catch (error) {
       console.error('Error generating PDF from LaTeX:', error);

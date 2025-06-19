@@ -46,43 +46,55 @@ function escapeLatexBody(str: string): string {
 }
 
 // Define the base LaTeX template for the cover letter
-const latexTemplate = `\\documentclass[11pt,a4paper]{article}
+const latexTemplate = `
+% Cover Letter Template
+\\documentclass[11pt,a4paper]{article}
 \\usepackage[margin=1in]{geometry}
-\\usepackage{parskip}
 \\usepackage{hyperref}
-\\usepackage{enumitem}
+\\usepackage{fontspec}
+\\setmainfont{Times New Roman}
 
 \\begin{document}
 
-% --- Personal Information ---
+% Personal Information
 \\textbf{{{Name}}} \\\\
 {{Email}} \\\\
 {{Phone}} \\\\
-{{LinkedIn}} \\\\
-{{GitHub}} \\\\
-{{Portfolio}}
+LinkedIn: \\href{{{LinkedIn}}}{{{LinkedIn}}} \\\\
+GitHub: \\href{{{GitHub}}}{{{GitHub}}} \\\\
+Portfolio: \\href{{{Portfolio}}}{{{Portfolio}}}
 
-\\vspace{0.5em}
+\\vspace{0.5in}
 
-% --- Company Information ---
-{{Date}} \\\\
-\\vspace{0.5em} \\\\
-Hiring Manager \\\\
-{{Company}} \\\\
+% Date
+{{Date}}
 
-\\vspace{1em}
+\\vspace{0.3in}
 
-\\textbf{Subject:} Application for {{Position}} Position at {{Company}}
+% Hiring Manager
+{{HiringManager}} \\\\
+{{Company}}
 
-\\vspace{1em}
+\\vspace{0.3in}
 
-Dear Hiring Manager,
+% Subject
+\\textbf{Application for {{Position}} Position at {{Company}}}
 
+\\vspace{0.3in}
+
+% Greeting
+Dear {{HiringManager}},
+
+\\vspace{0.2in}
+
+% Body
 {{BodyParagraphs}}
 
-\\vspace{1.5em}
+\\vspace{0.3in}
+
+% Closing
 Sincerely, \\\\
-\\textbf{{{Name}}}
+{{Name}}
 
 \\end{document}`;
 
@@ -269,10 +281,11 @@ ${resumeContent}`;
       .replace(/{{Name}}/g, escapeLatex(finalFullName))
       .replace(/{{Email}}/g, escapeLatex(finalEmail))
       .replace(/{{Phone}}/g, finalPhone ? escapeLatex(finalPhone) : '')
-      .replace(/{{LinkedIn}}/g, finalLinkedin ? `LinkedIn: ${escapeLatex(finalLinkedin)}` : '')
-      .replace(/{{GitHub}}/g, finalGithub ? `GitHub: ${escapeLatex(finalGithub)}` : '')
-      .replace(/{{Portfolio}}/g, finalPortfolio ? `Portfolio: ${escapeLatex(finalPortfolio)}` : '')
+      .replace(/{{LinkedIn}}/g, finalLinkedin ? escapeLatex(finalLinkedin) : '')
+      .replace(/{{GitHub}}/g, finalGithub ? escapeLatex(finalGithub) : '')
+      .replace(/{{Portfolio}}/g, finalPortfolio ? escapeLatex(finalPortfolio) : '')
       .replace(/{{Date}}/g, escapeLatex(currentDate))
+      .replace(/{{HiringManager}}/g, escapeLatex('Hiring Manager'))
       .replace(/{{Company}}/g, escapeLatex(companyName))
       .replace(/{{Position}}/g, escapeLatex(jobTitle))
       .replace(/{{BodyParagraphs}}/g, escapeLatexBody(aiContent.BodyParagraphs) || "");

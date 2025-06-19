@@ -77,7 +77,8 @@ const mainFilterStatuses = ['Applied', 'Rejected', 'Interview Scheduled', 'Inter
 
 const JobTracking = ({ user }) => {
   const [applications, setApplications] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingApplication, setEditingApplication] = useState(null);
   const [viewingApplication, setViewingApplication] = useState(null);
@@ -151,8 +152,7 @@ const JobTracking = ({ user }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    setSubmitting(true);
 
     try {
       const response = await axios.post('/api/job-applications', formData);
@@ -162,19 +162,16 @@ const JobTracking = ({ user }) => {
         severity: 'success'
       });
       setFormData({
-        companyName: '',
         jobTitle: '',
+        companyName: '',
         jobDescription: '',
-        applicationDate: '',
         applicationStatus: 'Applied',
+        interviewDate: '',
         notes: '',
-        jobUrl: '',
-        salary: '',
         location: '',
-        contactPerson: '',
         contactEmail: ''
       });
-      setShowAddForm(false);
+      setOpenDialog(false);
       fetchApplications();
     } catch (error) {
       console.error('Add application error:', error);
@@ -188,10 +185,14 @@ const JobTracking = ({ user }) => {
         localStorage.removeItem('user');
         window.location.reload();
       } else {
-        setError(error.response?.data?.error || 'Failed to add application');
+        setSnackbar({
+          open: true,
+          message: error.response?.data?.error || 'Failed to add application',
+          severity: 'error'
+        });
       }
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -616,21 +617,35 @@ const JobTracking = ({ user }) => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                                 {filteredApplications.length === 0 ? (
-                   <TableRow>
-                     <TableCell colSpan={5} sx={{ textAlign: 'center', py: 8 }}>
-                       <Box>
-                         <WorkIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-                         <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
-                           No applications found
-                         </Typography>
-                         <Typography variant="body2" color="text.secondary">
-                           Add your first job application to get started
-                         </Typography>
-                       </Box>
-                     </TableCell>
-                   </TableRow>
-                 ) : (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} sx={{ textAlign: 'center', py: 8 }}>
+                      <Box>
+                        <CircularProgress size={40} sx={{ mb: 2 }} />
+                        <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                          Loading applications...
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Please wait while we fetch your job applications
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredApplications.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} sx={{ textAlign: 'center', py: 8 }}>
+                      <Box>
+                        <WorkIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+                        <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                          No applications found
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Add your first job application to get started
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ) : (
                   filteredApplications.map((application, index) => (
                     <React.Fragment key={application.id}>
                       <TableRow 
@@ -1178,6 +1193,7 @@ const JobTracking = ({ user }) => {
           <Button 
             onClick={handleSubmit}
             variant="contained"
+            disabled={submitting}
             sx={{
               textTransform: 'none',
               borderRadius: 3,
@@ -1189,10 +1205,21 @@ const JobTracking = ({ user }) => {
               '&:hover': {
                 backgroundColor: '#2563eb',
                 boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+              },
+              '&:disabled': {
+                backgroundColor: '#94a3b8',
+                color: 'white'
               }
             }}
           >
-            {editingApplication ? 'Update Application' : 'Add Application'}
+            {submitting ? (
+              <>
+                <CircularProgress size={16} sx={{ mr: 1, color: 'white' }} />
+                {editingApplication ? 'Updating...' : 'Adding...'}
+              </>
+            ) : (
+              editingApplication ? 'Update Application' : 'Add Application'
+            )}
           </Button>
         </DialogActions>
       </Dialog>

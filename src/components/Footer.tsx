@@ -28,8 +28,11 @@ const Footer = () => {
         backgroundColor: '#1e293b',
         color: 'white',
         py: 6,
-        mt: 8,
+        mt: 'auto',
         borderTop: '1px solid #334155',
+        position: 'relative',
+        zIndex: 10,
+        width: '100%'
       }}
     >
       <Container maxWidth="lg">
