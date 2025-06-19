@@ -246,7 +246,9 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
   // Function to convert LaTeX content to PDF
   const generatePDFFromLatex = (latexContent) => {
     try {
-      console.log('Generating PDF from LaTeX content');
+      console.log('=== PDF GENERATION START ===');
+      console.log('Original LaTeX content length:', latexContent.length);
+      console.log('Original LaTeX content (first 500 chars):', latexContent.substring(0, 500));
       
       // Extract and clean text content from LaTeX with better parsing
       let text = latexContent
@@ -272,7 +274,8 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         .replace(/\n\s*\n/g, '\n\n')
         .trim();
 
-      console.log('Cleaned text:', text.substring(0, 200) + '...');
+      console.log('Cleaned text length:', text.length);
+      console.log('Cleaned text (first 500 chars):', text.substring(0, 500));
 
       // Check if text is empty after cleaning
       if (!text || text.trim() === '') {
@@ -282,6 +285,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
 
       // Parse the content into structured sections
       const sections = parseCoverLetterSections(text);
+      console.log('Parsed sections:', sections);
       
       // Create PDF with proper formatting
       const pdf = new jsPDF();
@@ -294,6 +298,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add personal information
       if (sections.personalInfo) {
+        console.log('Adding personal info:', sections.personalInfo);
         pdf.setFontSize(12);
         pdf.setFont('helvetica', 'bold');
         const nameLines = pdf.splitTextToSize(sections.personalInfo.name || '', maxWidth);
@@ -322,6 +327,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add date
       if (sections.date) {
+        console.log('Adding date:', sections.date);
         pdf.setFontSize(10);
         pdf.setFont('helvetica', 'normal');
         pdf.text(sections.date, margin, yPosition);
@@ -330,6 +336,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add hiring manager and company
       if (sections.hiringManager || sections.company) {
+        console.log('Adding hiring manager/company:', { hiringManager: sections.hiringManager, company: sections.company });
         const managerCompany = [sections.hiringManager, sections.company].filter(Boolean).join('\n');
         const lines = pdf.splitTextToSize(managerCompany, maxWidth);
         for (let line of lines) {
@@ -341,6 +348,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add subject
       if (sections.subject) {
+        console.log('Adding subject:', sections.subject);
         pdf.setFontSize(12);
         pdf.setFont('helvetica', 'bold');
         const subjectLines = pdf.splitTextToSize(sections.subject, maxWidth);
@@ -353,6 +361,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add greeting
       if (sections.greeting) {
+        console.log('Adding greeting:', sections.greeting);
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'normal');
         pdf.text(sections.greeting, margin, yPosition);
@@ -361,6 +370,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add body
       if (sections.body) {
+        console.log('Adding body (first 100 chars):', sections.body.substring(0, 100));
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'normal');
         const bodyLines = pdf.splitTextToSize(sections.body, maxWidth);
@@ -377,6 +387,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add closing
       if (sections.closing) {
+        console.log('Adding closing:', sections.closing);
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'normal');
         const closingLines = pdf.splitTextToSize(sections.closing, maxWidth);
@@ -390,7 +401,8 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       const pdfBlob = pdf.output('blob');
       const pdfUrl = URL.createObjectURL(pdfBlob);
       
-      console.log('PDF generated successfully');
+      console.log('PDF generated successfully, URL:', pdfUrl);
+      console.log('=== PDF GENERATION END ===');
       return pdfUrl;
     } catch (error) {
       console.error('Error generating PDF from LaTeX:', error);
@@ -400,24 +412,35 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
 
   // Helper function to parse cover letter sections
   const parseCoverLetterSections = (text) => {
+    console.log('=== PARSING START ===');
+    console.log('Input text length:', text.length);
+    console.log('Input text (first 300 chars):', text.substring(0, 300));
+    
     const sections = {};
     
     // Split text into lines
     const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+    console.log('Total lines after filtering:', lines.length);
+    console.log('First 10 lines:', lines.slice(0, 10));
     
     let currentSection = '';
     let currentContent = [];
     
-    for (let line of lines) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
       // Skip LaTeX comments
       if (line.startsWith('%')) {
+        console.log(`Skipping comment line ${i}:`, line);
         continue;
       }
       
       // Detect sections
       if (line.includes('Personal Information') || line.includes('Name:')) {
+        console.log(`Found Personal Information section at line ${i}:`, line);
         if (currentSection && currentContent.length > 0) {
           sections[currentSection] = currentContent.join(' ');
+          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
         }
         currentSection = 'personalInfo';
         currentContent = [];
@@ -425,8 +448,10 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       }
       
       if (line.includes('Date')) {
+        console.log(`Found Date section at line ${i}:`, line);
         if (currentSection && currentContent.length > 0) {
           sections[currentSection] = currentContent.join(' ');
+          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
         }
         currentSection = 'date';
         currentContent = [];
@@ -434,8 +459,10 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       }
       
       if (line.includes('Hiring Manager')) {
+        console.log(`Found Hiring Manager section at line ${i}:`, line);
         if (currentSection && currentContent.length > 0) {
           sections[currentSection] = currentContent.join(' ');
+          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
         }
         currentSection = 'hiringManager';
         currentContent = [];
@@ -443,8 +470,10 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       }
       
       if (line.includes('Subject')) {
+        console.log(`Found Subject section at line ${i}:`, line);
         if (currentSection && currentContent.length > 0) {
           sections[currentSection] = currentContent.join(' ');
+          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
         }
         currentSection = 'subject';
         currentContent = [];
@@ -452,8 +481,10 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       }
       
       if (line.includes('Greeting') || line.includes('Dear')) {
+        console.log(`Found Greeting section at line ${i}:`, line);
         if (currentSection && currentContent.length > 0) {
           sections[currentSection] = currentContent.join(' ');
+          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
         }
         currentSection = 'greeting';
         currentContent = [];
@@ -461,8 +492,10 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       }
       
       if (line.includes('Body')) {
+        console.log(`Found Body section at line ${i}:`, line);
         if (currentSection && currentContent.length > 0) {
           sections[currentSection] = currentContent.join(' ');
+          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
         }
         currentSection = 'body';
         currentContent = [];
@@ -470,8 +503,10 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       }
       
       if (line.includes('Closing') || line.includes('Sincerely')) {
+        console.log(`Found Closing section at line ${i}:`, line);
         if (currentSection && currentContent.length > 0) {
           sections[currentSection] = currentContent.join(' ');
+          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
         }
         currentSection = 'closing';
         currentContent = [];
@@ -487,10 +522,12 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
     // Add the last section
     if (currentSection && currentContent.length > 0) {
       sections[currentSection] = currentContent.join(' ');
+      console.log(`Saved final section ${currentSection}:`, sections[currentSection]);
     }
     
     // Parse personal info into structured format
     if (sections.personalInfo) {
+      console.log('Parsing personal info from:', sections.personalInfo);
       const personalInfoText = sections.personalInfo;
       sections.personalInfo = {
         name: personalInfoText.match(/([A-Za-z\s]+)/)?.[1]?.trim() || '',
@@ -500,15 +537,20 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         github: personalInfoText.match(/GitHub:\s*(https?:\/\/[^\s]+)/)?.[1] || '',
         portfolio: personalInfoText.match(/Portfolio:\s*(https?:\/\/[^\s]+)/)?.[1] || ''
       };
+      console.log('Parsed personal info:', sections.personalInfo);
     }
     
+    console.log('Final parsed sections:', sections);
+    console.log('=== PARSING END ===');
     return sections;
   };
 
   // Function to generate preview from LaTeX content
   const generatePreviewFromLatex = (latexContent) => {
     try {
-      console.log('Generating preview from LaTeX content');
+      console.log('=== PREVIEW GENERATION START ===');
+      console.log('Preview LaTeX content length:', latexContent.length);
+      console.log('Preview LaTeX content (first 500 chars):', latexContent.substring(0, 500));
       
       // Extract and clean text content from LaTeX with better parsing
       let text = latexContent
@@ -534,14 +576,19 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         .replace(/\n\s*\n/g, '\n\n')
         .trim();
 
+      console.log('Preview cleaned text length:', text.length);
+      console.log('Preview cleaned text (first 500 chars):', text.substring(0, 500));
+
       // Parse the content into structured sections
       const sections = parseCoverLetterSections(text);
+      console.log('Preview parsed sections:', sections);
       
       // Generate formatted preview HTML
       let previewHTML = '<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6;">';
       
       // Add personal information
       if (sections.personalInfo) {
+        console.log('Preview: Adding personal info:', sections.personalInfo);
         previewHTML += `<div style="margin-bottom: 20px;">
           <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">${sections.personalInfo.name || ''}</div>
           <div style="font-size: 12px; color: #666;">`;
@@ -557,11 +604,13 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add date
       if (sections.date) {
+        console.log('Preview: Adding date:', sections.date);
         previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">${sections.date}</div>`;
       }
       
       // Add hiring manager and company
       if (sections.hiringManager || sections.company) {
+        console.log('Preview: Adding hiring manager/company:', { hiringManager: sections.hiringManager, company: sections.company });
         previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">`;
         if (sections.hiringManager) previewHTML += `<div>${sections.hiringManager}</div>`;
         if (sections.company) previewHTML += `<div>${sections.company}</div>`;
@@ -570,27 +619,33 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Add subject
       if (sections.subject) {
+        console.log('Preview: Adding subject:', sections.subject);
         previewHTML += `<div style="margin-bottom: 20px; font-weight: bold; font-size: 14px;">${sections.subject}</div>`;
       }
       
       // Add greeting
       if (sections.greeting) {
+        console.log('Preview: Adding greeting:', sections.greeting);
         previewHTML += `<div style="margin-bottom: 20px;">${sections.greeting}</div>`;
       }
       
       // Add body
       if (sections.body) {
+        console.log('Preview: Adding body (first 100 chars):', sections.body.substring(0, 100));
         previewHTML += `<div style="margin-bottom: 20px; text-align: justify;">${sections.body.replace(/\n/g, '<br>')}</div>`;
       }
       
       // Add closing
       if (sections.closing) {
+        console.log('Preview: Adding closing:', sections.closing);
         previewHTML += `<div style="margin-top: 20px;">${sections.closing}</div>`;
       }
       
       previewHTML += '</div>';
       
-      console.log('Preview generated successfully');
+      console.log('Preview HTML generated successfully');
+      console.log('Preview HTML (first 500 chars):', previewHTML.substring(0, 500));
+      console.log('=== PREVIEW GENERATION END ===');
       return previewHTML;
     } catch (error) {
       console.error('Error generating preview from LaTeX:', error);
