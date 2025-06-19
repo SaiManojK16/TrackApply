@@ -129,22 +129,36 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         try {
           setPdfLoading(true);
           
-          // Generate formatted preview from LaTeX content
-          const previewHTML = generatePreviewFromLatex(response.data.coverLetterLatex);
-          setFormattedPreview(previewHTML);
+          // Call the API to get structured content for preview
+          const previewResponse = await axios.post('/api/generate-pdf', {
+            latexContent: response.data.coverLetterLatex,
+            filename: 'preview'
+          });
           
-          // Also generate PDF for download
-          const pdfUrl = generatePDFFromLatex(response.data.coverLetterLatex);
-          
-          if (pdfUrl) {
-            setPreviewUrl(pdfUrl);
-            console.log('PDF preview generated successfully');
+          if (previewResponse.data.success && previewResponse.data.structuredContent) {
+            const content = previewResponse.data.structuredContent;
+            
+            // Generate formatted preview HTML from structured content
+            const previewHTML = generatePreviewFromStructuredContent(content);
+            setFormattedPreview(previewHTML);
+            
+            console.log('Preview generated successfully from structured content');
           } else {
-            console.warn('PDF generation failed, but preview is available');
+            // Fallback to old method
+            const previewHTML = generatePreviewFromLatex(response.data.coverLetterLatex);
+            setFormattedPreview(previewHTML);
+            console.warn('Using fallback preview generation');
           }
         } catch (pdfError) {
           console.error('Preview generation failed:', pdfError);
-          setError('Failed to generate preview');
+          // Fallback to old method
+          try {
+            const previewHTML = generatePreviewFromLatex(response.data.coverLetterLatex);
+            setFormattedPreview(previewHTML);
+          } catch (fallbackError) {
+            console.error('Fallback preview also failed:', fallbackError);
+            setError('Failed to generate preview');
+          }
         } finally {
           setPdfLoading(false);
         }
@@ -163,59 +177,138 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
   const handleDownload = async () => {
     if (coverLetter) {
       try {
-        // Generate PDF from LaTeX content
-        const pdf = new jsPDF();
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const margin = 20;
-        const maxWidth = pageWidth - (2 * margin);
+        setPdfLoading(true);
         
-        // Extract text content from LaTeX
-        let text = coverLetter
-          .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
-          .replace(/\\end\{document\}/g, '')
-          .replace(/\\usepackage[^}]*/g, '')
-          .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-          .replace(/\\[a-zA-Z]+/g, '')
-          .replace(/[{}]/g, '')
-          .replace(/\\\\(?!\\)/g, '\n')
-          .replace(/\\\\/g, '\n')
-          .replace(/\\vspace\{[^}]*\}/g, '\n\n')
-          .replace(/\\textbf\{([^}]*)\}/g, '$1')
-          .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
-          .replace(/\\href\{([^}]*)\}/g, '$1')
-          .replace(/\s+/g, ' ')
-          .replace(/\n\s*\n/g, '\n\n')
-          .trim();
-        
-        // Set font
-        pdf.setFont('helvetica');
-        pdf.setFontSize(12);
-        
-        // Split text into lines
-        const lines = pdf.splitTextToSize(text, maxWidth);
-        
-        let yPosition = 30;
-        const lineHeight = 7;
-        
-        // Add content to PDF
-        for (let i = 0; i < lines.length; i++) {
-          if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-          pdf.text(lines[i], margin, yPosition);
-          yPosition += lineHeight;
-        }
-        
-        // Download the PDF
-        const filename = `cover-letter-${formData.companyName || 'document'}.pdf`;
-        pdf.save(filename);
-        
-        setSnackbar({
-          open: true,
-          message: 'Cover letter downloaded successfully!',
-          severity: 'success'
+        // Call the API to get structured content
+        const response = await axios.post('/api/generate-pdf', {
+          latexContent: coverLetter,
+          filename: `cover-letter-${formData.companyName || 'document'}`
         });
+        
+        if (response.data.success && response.data.structuredContent) {
+          const content = response.data.structuredContent;
+          
+          // Generate PDF with structured content
+          const pdf = new jsPDF();
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const margin = 20;
+          const maxWidth = pageWidth - (2 * margin);
+          
+          let yPosition = 30;
+          const lineHeight = 7;
+          
+          // Add personal information
+          if (content.personalInfo.name) {
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            const nameLines = pdf.splitTextToSize(content.personalInfo.name, maxWidth);
+            for (let line of nameLines) {
+              pdf.text(line, margin, yPosition);
+              yPosition += lineHeight;
+            }
+            yPosition += lineHeight;
+          }
+          
+          // Add contact information
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'normal');
+          const contactInfo = [
+            content.personalInfo.email,
+            content.personalInfo.phone,
+            content.personalInfo.linkedin ? `LinkedIn: ${content.personalInfo.linkedin}` : '',
+            content.personalInfo.github ? `GitHub: ${content.personalInfo.github}` : '',
+            content.personalInfo.portfolio ? `Portfolio: ${content.personalInfo.portfolio}` : ''
+          ].filter(Boolean);
+          
+          for (let info of contactInfo) {
+            pdf.text(info, margin, yPosition);
+            yPosition += lineHeight;
+          }
+          
+          yPosition += lineHeight * 2;
+          
+          // Add date
+          if (content.date) {
+            pdf.text(content.date, margin, yPosition);
+            yPosition += lineHeight * 2;
+          }
+          
+          // Add hiring manager and company
+          if (content.hiringManager || content.company) {
+            if (content.hiringManager) {
+              pdf.text(content.hiringManager, margin, yPosition);
+              yPosition += lineHeight;
+            }
+            if (content.company) {
+              pdf.text(content.company, margin, yPosition);
+              yPosition += lineHeight;
+            }
+            yPosition += lineHeight;
+          }
+          
+          // Add subject
+          if (content.subject) {
+            pdf.setFontSize(12);
+            pdf.setFont('helvetica', 'bold');
+            const subjectLines = pdf.splitTextToSize(content.subject, maxWidth);
+            for (let line of subjectLines) {
+              pdf.text(line, margin, yPosition);
+              yPosition += lineHeight;
+            }
+            yPosition += lineHeight * 2;
+          }
+          
+          // Add greeting
+          if (content.greeting) {
+            pdf.setFontSize(11);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(content.greeting, margin, yPosition);
+            yPosition += lineHeight * 2;
+          }
+          
+          // Add body
+          if (content.body) {
+            pdf.setFontSize(11);
+            pdf.setFont('helvetica', 'normal');
+            const bodyLines = pdf.splitTextToSize(content.body, maxWidth);
+            for (let line of bodyLines) {
+              if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
+                pdf.addPage();
+                yPosition = 20;
+              }
+              pdf.text(line, margin, yPosition);
+              yPosition += lineHeight;
+            }
+            yPosition += lineHeight * 2;
+          }
+          
+          // Add closing
+          if (content.closing) {
+            pdf.setFontSize(11);
+            pdf.setFont('helvetica', 'normal');
+            const closingLines = pdf.splitTextToSize(content.closing, maxWidth);
+            for (let line of closingLines) {
+              if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
+                pdf.addPage();
+                yPosition = 20;
+              }
+              pdf.text(line, margin, yPosition);
+              yPosition += lineHeight;
+            }
+          }
+          
+          // Download the PDF
+          const filename = `cover-letter-${formData.companyName || 'document'}.pdf`;
+          pdf.save(filename);
+          
+          setSnackbar({
+            open: true,
+            message: 'Cover letter downloaded successfully!',
+            severity: 'success'
+          });
+        } else {
+          throw new Error('Failed to get structured content from API');
+        }
       } catch (error) {
         console.error('Download failed:', error);
         setSnackbar({
@@ -223,6 +316,8 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
           message: 'Failed to download cover letter',
           severity: 'error'
         });
+      } finally {
+        setPdfLoading(false);
       }
     }
   };
@@ -573,6 +668,63 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       console.error('Error generating preview from LaTeX:', error);
       return '<div style="color: red;">Error generating preview</div>';
     }
+  };
+
+  // Function to generate preview from structured content
+  const generatePreviewFromStructuredContent = (content) => {
+    let previewHTML = '<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; background: white;">';
+    
+    // Add personal information
+    if (content.personalInfo.name) {
+      previewHTML += `<div style="margin-bottom: 20px;">
+        <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">${content.personalInfo.name}</div>
+        <div style="font-size: 12px; color: #666;">`;
+      
+      if (content.personalInfo.email) previewHTML += `<div>${content.personalInfo.email}</div>`;
+      if (content.personalInfo.phone) previewHTML += `<div>${content.personalInfo.phone}</div>`;
+      if (content.personalInfo.linkedin) previewHTML += `<div>LinkedIn: ${content.personalInfo.linkedin}</div>`;
+      if (content.personalInfo.github) previewHTML += `<div>GitHub: ${content.personalInfo.github}</div>`;
+      if (content.personalInfo.portfolio) previewHTML += `<div>Portfolio: ${content.personalInfo.portfolio}</div>`;
+      
+      previewHTML += `</div></div>`;
+    }
+    
+    // Add date
+    if (content.date) {
+      previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">${content.date}</div>`;
+    }
+    
+    // Add hiring manager and company
+    if (content.hiringManager || content.company) {
+      previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">`;
+      if (content.hiringManager) previewHTML += `<div>${content.hiringManager}</div>`;
+      if (content.company) previewHTML += `<div>${content.company}</div>`;
+      previewHTML += `</div>`;
+    }
+    
+    // Add subject
+    if (content.subject) {
+      previewHTML += `<div style="margin-bottom: 20px; font-weight: bold; font-size: 14px;">${content.subject}</div>`;
+    }
+    
+    // Add greeting
+    if (content.greeting) {
+      previewHTML += `<div style="margin-bottom: 20px;">${content.greeting}</div>`;
+    }
+    
+    // Add body
+    if (content.body) {
+      previewHTML += `<div style="margin-bottom: 20px; text-align: justify;">${content.body.replace(/\n/g, '<br>')}</div>`;
+    }
+    
+    // Add closing
+    if (content.closing) {
+      previewHTML += `<div style="margin-top: 20px;">${content.closing.replace(/\n/g, '<br>')}</div>`;
+    }
+    
+    previewHTML += '</div>';
+    
+    return previewHTML;
   };
 
   return (

@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Extract text content from LaTeX for PDF generation
-    const textContent = extractTextFromLatex(latexContent);
+    // Extract structured content from LaTeX for better PDF generation
+    const structuredContent = extractStructuredContentFromLatex(latexContent);
 
     // Update generation count if user is authenticated
     if (user && !user.hasUnlimitedAccess) {
@@ -35,12 +35,12 @@ export async function POST(request: NextRequest) {
       await user.save();
     }
 
-    // Return the text content for client-side PDF generation
+    // Return structured content for client-side PDF generation
     return NextResponse.json({
       success: true,
-      textContent: textContent,
+      structuredContent: structuredContent,
       filename: filename || 'cover-letter.pdf',
-      message: 'Text content extracted successfully. Use client-side PDF generation.'
+      message: 'Content extracted successfully. Use client-side PDF generation.'
     });
 
   } catch (error) {
@@ -52,21 +52,119 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to extract text content from LaTeX
-function extractTextFromLatex(latexContent: string): string {
-  // Remove LaTeX commands and extract plain text
-  let text = latexContent
-    // Remove LaTeX document structure
-    .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
-    .replace(/\\end\{document\}/g, '')
-    // Remove common LaTeX commands
-    .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-    .replace(/\\[a-zA-Z]+/g, '')
-    // Remove special characters
-    .replace(/[{}]/g, '')
-    // Clean up whitespace
-    .replace(/\s+/g, ' ')
-    .trim();
+// Function to extract structured content from LaTeX
+function extractStructuredContentFromLatex(latexContent: string) {
+  try {
+    const content = {
+      personalInfo: {
+        name: '',
+        email: '',
+        phone: '',
+        linkedin: '',
+        github: '',
+        portfolio: ''
+      },
+      date: '',
+      hiringManager: '',
+      company: '',
+      position: '',
+      subject: '',
+      greeting: '',
+      body: '',
+      closing: ''
+    };
 
-  return text;
+    // Extract personal information
+    const nameMatch = latexContent.match(/\\textbf\{([^}]+)\}/);
+    if (nameMatch) {
+      content.personalInfo.name = nameMatch[1];
+    }
+
+    // Extract email
+    const emailMatch = latexContent.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    if (emailMatch) {
+      content.personalInfo.email = emailMatch[1];
+    }
+
+    // Extract phone
+    const phoneMatch = latexContent.match(/(\d{10,})/);
+    if (phoneMatch) {
+      content.personalInfo.phone = phoneMatch[1];
+    }
+
+    // Extract LinkedIn
+    const linkedinMatch = latexContent.match(/(https?:\/\/[^\s]+linkedin[^\s]*)/i);
+    if (linkedinMatch) {
+      content.personalInfo.linkedin = linkedinMatch[1];
+    }
+
+    // Extract GitHub
+    const githubMatch = latexContent.match(/(https?:\/\/[^\s]+github[^\s]*)/i);
+    if (githubMatch) {
+      content.personalInfo.github = githubMatch[1];
+    }
+
+    // Extract Portfolio
+    const portfolioMatch = latexContent.match(/(https?:\/\/[^\s]+)/);
+    if (portfolioMatch) {
+      content.personalInfo.portfolio = portfolioMatch[1];
+    }
+
+    // Extract date
+    const dateMatch = latexContent.match(/([A-Za-z]+\s+\d{1,2},\s+\d{4})/);
+    if (dateMatch) {
+      content.date = dateMatch[1];
+    }
+
+    // Extract company
+    const companyMatch = latexContent.match(/Position at ([^}]+)/);
+    if (companyMatch) {
+      content.company = companyMatch[1];
+    }
+
+    // Extract position
+    const positionMatch = latexContent.match(/Application for ([^}]+) Position/);
+    if (positionMatch) {
+      content.position = positionMatch[1];
+    }
+
+    // Extract subject
+    const subjectMatch = latexContent.match(/Application for ([^}]+) Position at ([^}]+)/);
+    if (subjectMatch) {
+      content.subject = `Application for ${subjectMatch[1]} Position at ${subjectMatch[2]}`;
+    }
+
+    // Extract greeting
+    const greetingMatch = latexContent.match(/Dear ([^,]+),/);
+    if (greetingMatch) {
+      content.greeting = `Dear ${greetingMatch[1]},`;
+    }
+
+    // Extract body content
+    const bodyMatch = latexContent.match(/Dear[^}]*\},\s*\n\s*\n([\s\S]*?)\s*\n\s*Sincerely/);
+    if (bodyMatch) {
+      content.body = bodyMatch[1]
+        .replace(/\\\\(?!\\)/g, '\n')
+        .replace(/\\\\/g, '\n')
+        .replace(/\\textbf\{([^}]*)\}/g, '$1')
+        .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
+        .replace(/\\href\{([^}]*)\}/g, '$1')
+        .replace(/[{}]/g, '')
+        .trim();
+    }
+
+    // Extract closing
+    const closingMatch = latexContent.match(/Sincerely,\\\\\\([^}]+)/);
+    if (closingMatch) {
+      content.closing = `Sincerely,\n${closingMatch[1]}`;
+    }
+
+    // Set default values for missing fields
+    content.hiringManager = 'Hiring Manager';
+
+    return content;
+  } catch (error) {
+    console.error('Error extracting structured content:', error);
+    return null;
+  }
 } 
