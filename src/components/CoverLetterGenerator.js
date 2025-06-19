@@ -17,7 +17,6 @@ import {
   CardContent,
   Divider,
   Chip,
-  Snackbar,
 } from '@mui/material';
 import { 
   Description as DescriptionIcon,
