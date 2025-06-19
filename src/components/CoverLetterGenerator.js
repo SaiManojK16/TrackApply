@@ -240,7 +240,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
   // Function to convert LaTeX content to PDF
   const generatePDFFromLatex = (latexContent) => {
     try {
-      // Extract text content from LaTeX
+      // Extract text content from LaTeX with better formatting
       let text = latexContent
         .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
         .replace(/\\end\{document\}/g, '')
@@ -258,7 +258,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         .replace(/\n\s*\n/g, '\n\n')
         .trim();
 
-      // Create PDF
+      // Create PDF with better formatting
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
       const margin = 20;
@@ -266,22 +266,51 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       
       // Set font
       pdf.setFont('helvetica');
-      pdf.setFontSize(12);
-      
-      // Split text into lines
-      const lines = pdf.splitTextToSize(text, maxWidth);
       
       let yPosition = 30;
       const lineHeight = 7;
       
-      // Add content to PDF
+      // Split text into lines and process
+      const lines = text.split('\n');
+      
       for (let i = 0; i < lines.length; i++) {
-        if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
-          pdf.addPage();
-          yPosition = 20;
+        const line = lines[i].trim();
+        if (!line) {
+          yPosition += lineHeight;
+          continue;
         }
-        pdf.text(lines[i], margin, yPosition);
-        yPosition += lineHeight;
+        
+        // Check if this is a header line (contains "---")
+        if (line.includes('---')) {
+          yPosition += lineHeight * 2;
+          continue;
+        }
+        
+        // Check if this is a bold line (name, subject, etc.)
+        if (line.includes('Subject:') || line.includes('Dear') || line.includes('Sincerely')) {
+          pdf.setFontSize(12);
+          pdf.setFont('helvetica', 'bold');
+        } else {
+          pdf.setFontSize(11);
+          pdf.setFont('helvetica', 'normal');
+        }
+        
+        // Split long lines
+        const textLines = pdf.splitTextToSize(line, maxWidth);
+        
+        for (let j = 0; j < textLines.length; j++) {
+          if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+          pdf.text(textLines[j], margin, yPosition);
+          yPosition += lineHeight;
+        }
+        
+        // Add extra space after paragraphs
+        if (line.length > 50) {
+          yPosition += lineHeight * 0.5;
+        }
       }
       
       // Generate PDF blob

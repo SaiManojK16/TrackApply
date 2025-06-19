@@ -46,41 +46,43 @@ function escapeLatexBody(str: string): string {
 }
 
 // Define the base LaTeX template for the cover letter
-const latexTemplate = `\\documentclass[11pt]{article}
+const latexTemplate = `\\documentclass[11pt,a4paper]{article}
 \\usepackage[margin=1in]{geometry}
 \\usepackage{parskip}
 \\usepackage{hyperref}
+\\usepackage{enumitem}
 
 \\begin{document}
 
 % --- Personal Information ---
-{{Name}} \\\\
-{{Address}} \\\\
-\\href{mailto:{{Email}}}{{Email}} \\\\
-\\href{{{Website}}}{{Website}} \\\\
-{{Phone}}
+\\textbf{{{Name}}} \\\\
+{{Email}} \\\\
+{{Phone}} \\\\
+{{LinkedIn}} \\\\
+{{GitHub}} \\\\
+{{Portfolio}}
 
-\\vspace{1em}
+\\vspace{0.5em}
 
 % --- Company Information ---
-{{HiringManager}} \\\\
+{{Date}} \\\\
+\\vspace{0.5em} \\\\
+Hiring Manager \\\\
 {{Company}} \\\\
-{{CompanyAddress}}
 
 \\vspace{1em}
 
-\\textbf{Subject:} Application for {{Position}} at {{Company}} \\\\
-\\textbf{Date:} {{Date}}
+\\textbf{Subject:} Application for {{Position}} Position at {{Company}}
 
 \\vspace{1em}
 
-Dear {{HiringManager}},
+Dear Hiring Manager,
 
 {{BodyParagraphs}}
 
 \\vspace{1.5em}
-\\textbf{Sincerely,} \\\\
-SIGNATURE_LINE_HERE
+Sincerely, \\\\
+\\textbf{{{Name}}}
 
 \\end{document}`;
 
@@ -265,17 +267,15 @@ ${resumeContent}`;
     // Fill the LaTeX template with dynamic content
     const filledLatex = latexTemplate
       .replace(/{{Name}}/g, escapeLatex(finalFullName))
-      .replace(/{{Address}}/g, escapeLatex(""))
       .replace(/{{Email}}/g, escapeLatex(finalEmail))
-      .replace(/{{Website}}/g, escapeLatex(finalPortfolio))
-      .replace(/{{Phone}}/g, escapeLatex(finalPhone))
-      .replace(/{{HiringManager}}/g, escapeLatex("Hiring Manager"))
-      .replace(/{{Company}}/g, escapeLatex(companyName))
-      .replace(/{{CompanyAddress}}/g, escapeLatex(""))
-      .replace(/{{Position}}/g, escapeLatex(jobTitle))
+      .replace(/{{Phone}}/g, finalPhone ? escapeLatex(finalPhone) : '')
+      .replace(/{{LinkedIn}}/g, finalLinkedin ? `LinkedIn: ${escapeLatex(finalLinkedin)}` : '')
+      .replace(/{{GitHub}}/g, finalGithub ? `GitHub: ${escapeLatex(finalGithub)}` : '')
+      .replace(/{{Portfolio}}/g, finalPortfolio ? `Portfolio: ${escapeLatex(finalPortfolio)}` : '')
       .replace(/{{Date}}/g, escapeLatex(currentDate))
-      .replace(/{{BodyParagraphs}}/g, escapeLatexBody(aiContent.BodyParagraphs) || "")
-      .replace('SIGNATURE_LINE_HERE', `\\textbf{${finalFullName}}`);
+      .replace(/{{Company}}/g, escapeLatex(companyName))
+      .replace(/{{Position}}/g, escapeLatex(jobTitle))
+      .replace(/{{BodyParagraphs}}/g, escapeLatexBody(aiContent.BodyParagraphs) || "");
 
     return NextResponse.json({ coverLetterLatex: filledLatex });
   } catch (error) {
