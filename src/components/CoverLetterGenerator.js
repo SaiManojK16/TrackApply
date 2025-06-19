@@ -48,6 +48,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
   const [loading, setLoading] = useState(false);
   const [coverLetter, setCoverLetter] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
+  const [formattedPreview, setFormattedPreview] = useState('');
   const [error, setError] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showLatex, setShowLatex] = useState(false);
@@ -128,18 +129,22 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         try {
           setPdfLoading(true);
           
-          // Generate PDF from LaTeX content
+          // Generate formatted preview from LaTeX content
+          const previewHTML = generatePreviewFromLatex(response.data.coverLetterLatex);
+          setFormattedPreview(previewHTML);
+          
+          // Also generate PDF for download
           const pdfUrl = generatePDFFromLatex(response.data.coverLetterLatex);
           
           if (pdfUrl) {
             setPreviewUrl(pdfUrl);
             console.log('PDF preview generated successfully');
           } else {
-            throw new Error('Failed to generate PDF preview');
+            console.warn('PDF generation failed, but preview is available');
           }
         } catch (pdfError) {
-          console.error('PDF generation failed:', pdfError);
-          setError('Failed to generate PDF preview');
+          console.error('Preview generation failed:', pdfError);
+          setError('Failed to generate preview');
         } finally {
           setPdfLoading(false);
         }
@@ -233,6 +238,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
     });
     setCoverLetter('');
     setPreviewUrl('');
+    setFormattedPreview('');
     setError('');
     setShowLatex(false);
   };
@@ -242,25 +248,25 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
     try {
       console.log('Generating PDF from LaTeX content');
       
-      // Extract and clean text content from LaTeX
+      // Extract and clean text content from LaTeX with better parsing
       let text = latexContent
         // Remove LaTeX document structure
         .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
         .replace(/\\end\{document\}/g, '')
         // Remove package imports
         .replace(/\\usepackage[^}]*/g, '')
-        // Remove LaTeX commands with braces
+        // Remove LaTeX commands with braces but keep content
+        .replace(/\\textbf\{([^}]*)\}/g, '$1')
+        .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
+        .replace(/\\href\{([^}]*)\}/g, '$1')
+        // Remove other LaTeX commands
         .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-        // Remove LaTeX commands without braces
         .replace(/\\[a-zA-Z]+/g, '')
         // Remove special LaTeX characters
         .replace(/[{}]/g, '')
         .replace(/\\\\(?!\\)/g, '\n')
         .replace(/\\\\/g, '\n')
         .replace(/\\vspace\{[^}]*\}/g, '\n\n')
-        .replace(/\\textbf\{([^}]*)\}/g, '$1')
-        .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
-        .replace(/\\href\{([^}]*)\}/g, '$1')
         // Clean up whitespace
         .replace(/\s+/g, ' ')
         .replace(/\n\s*\n/g, '\n\n')
@@ -274,6 +280,9 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         return null;
       }
 
+      // Parse the content into structured sections
+      const sections = parseCoverLetterSections(text);
+      
       // Create PDF with proper formatting
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -283,51 +292,97 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       let yPosition = 30;
       const lineHeight = 7;
       
-      // Split text into lines and process
-      const lines = text.split('\n');
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) {
+      // Add personal information
+      if (sections.personalInfo) {
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        const nameLines = pdf.splitTextToSize(sections.personalInfo.name || '', maxWidth);
+        for (let line of nameLines) {
+          pdf.text(line, margin, yPosition);
           yPosition += lineHeight;
-          continue;
         }
         
-        // Skip LaTeX comment lines
-        if (line.startsWith('%')) {
-          continue;
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        const contactLines = [
+          sections.personalInfo.email,
+          sections.personalInfo.phone,
+          sections.personalInfo.linkedin,
+          sections.personalInfo.github,
+          sections.personalInfo.portfolio
+        ].filter(Boolean);
+        
+        for (let line of contactLines) {
+          pdf.text(line, margin, yPosition);
+          yPosition += lineHeight;
         }
         
-        // Handle different line types
-        let fontSize = 11;
-        let fontStyle = 'normal';
-        
-        // Bold for headers and important lines
-        if (line.includes('Subject:') || line.includes('Dear') || line.includes('Sincerely') || 
-            line.includes('Application for') || line.includes('Position at')) {
-          fontSize = 12;
-          fontStyle = 'bold';
+        yPosition += lineHeight * 2;
+      }
+      
+      // Add date
+      if (sections.date) {
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(sections.date, margin, yPosition);
+        yPosition += lineHeight * 2;
+      }
+      
+      // Add hiring manager and company
+      if (sections.hiringManager || sections.company) {
+        const managerCompany = [sections.hiringManager, sections.company].filter(Boolean).join('\n');
+        const lines = pdf.splitTextToSize(managerCompany, maxWidth);
+        for (let line of lines) {
+          pdf.text(line, margin, yPosition);
+          yPosition += lineHeight;
         }
-        
-        // Set font
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', fontStyle);
-        
-        // Split long lines
-        const textLines = pdf.splitTextToSize(line, maxWidth);
-        
-        for (let j = 0; j < textLines.length; j++) {
+        yPosition += lineHeight * 2;
+      }
+      
+      // Add subject
+      if (sections.subject) {
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        const subjectLines = pdf.splitTextToSize(sections.subject, maxWidth);
+        for (let line of subjectLines) {
+          pdf.text(line, margin, yPosition);
+          yPosition += lineHeight;
+        }
+        yPosition += lineHeight * 2;
+      }
+      
+      // Add greeting
+      if (sections.greeting) {
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(sections.greeting, margin, yPosition);
+        yPosition += lineHeight * 2;
+      }
+      
+      // Add body
+      if (sections.body) {
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        const bodyLines = pdf.splitTextToSize(sections.body, maxWidth);
+        for (let line of bodyLines) {
           if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
             pdf.addPage();
             yPosition = 20;
           }
-          pdf.text(textLines[j], margin, yPosition);
+          pdf.text(line, margin, yPosition);
           yPosition += lineHeight;
         }
-        
-        // Add extra space after paragraphs
-        if (line.length > 80) {
-          yPosition += lineHeight * 0.5;
+        yPosition += lineHeight * 2;
+      }
+      
+      // Add closing
+      if (sections.closing) {
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        const closingLines = pdf.splitTextToSize(sections.closing, maxWidth);
+        for (let line of closingLines) {
+          pdf.text(line, margin, yPosition);
+          yPosition += lineHeight;
         }
       }
       
@@ -340,6 +395,206 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
     } catch (error) {
       console.error('Error generating PDF from LaTeX:', error);
       return null;
+    }
+  };
+
+  // Helper function to parse cover letter sections
+  const parseCoverLetterSections = (text) => {
+    const sections = {};
+    
+    // Split text into lines
+    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+    
+    let currentSection = '';
+    let currentContent = [];
+    
+    for (let line of lines) {
+      // Skip LaTeX comments
+      if (line.startsWith('%')) {
+        continue;
+      }
+      
+      // Detect sections
+      if (line.includes('Personal Information') || line.includes('Name:')) {
+        if (currentSection && currentContent.length > 0) {
+          sections[currentSection] = currentContent.join(' ');
+        }
+        currentSection = 'personalInfo';
+        currentContent = [];
+        continue;
+      }
+      
+      if (line.includes('Date')) {
+        if (currentSection && currentContent.length > 0) {
+          sections[currentSection] = currentContent.join(' ');
+        }
+        currentSection = 'date';
+        currentContent = [];
+        continue;
+      }
+      
+      if (line.includes('Hiring Manager')) {
+        if (currentSection && currentContent.length > 0) {
+          sections[currentSection] = currentContent.join(' ');
+        }
+        currentSection = 'hiringManager';
+        currentContent = [];
+        continue;
+      }
+      
+      if (line.includes('Subject')) {
+        if (currentSection && currentContent.length > 0) {
+          sections[currentSection] = currentContent.join(' ');
+        }
+        currentSection = 'subject';
+        currentContent = [];
+        continue;
+      }
+      
+      if (line.includes('Greeting') || line.includes('Dear')) {
+        if (currentSection && currentContent.length > 0) {
+          sections[currentSection] = currentContent.join(' ');
+        }
+        currentSection = 'greeting';
+        currentContent = [];
+        continue;
+      }
+      
+      if (line.includes('Body')) {
+        if (currentSection && currentContent.length > 0) {
+          sections[currentSection] = currentContent.join(' ');
+        }
+        currentSection = 'body';
+        currentContent = [];
+        continue;
+      }
+      
+      if (line.includes('Closing') || line.includes('Sincerely')) {
+        if (currentSection && currentContent.length > 0) {
+          sections[currentSection] = currentContent.join(' ');
+        }
+        currentSection = 'closing';
+        currentContent = [];
+        continue;
+      }
+      
+      // Add content to current section
+      if (currentSection) {
+        currentContent.push(line);
+      }
+    }
+    
+    // Add the last section
+    if (currentSection && currentContent.length > 0) {
+      sections[currentSection] = currentContent.join(' ');
+    }
+    
+    // Parse personal info into structured format
+    if (sections.personalInfo) {
+      const personalInfoText = sections.personalInfo;
+      sections.personalInfo = {
+        name: personalInfoText.match(/([A-Za-z\s]+)/)?.[1]?.trim() || '',
+        email: personalInfoText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || '',
+        phone: personalInfoText.match(/\d{10,}/)?.[0] || '',
+        linkedin: personalInfoText.match(/LinkedIn:\s*(https?:\/\/[^\s]+)/)?.[1] || '',
+        github: personalInfoText.match(/GitHub:\s*(https?:\/\/[^\s]+)/)?.[1] || '',
+        portfolio: personalInfoText.match(/Portfolio:\s*(https?:\/\/[^\s]+)/)?.[1] || ''
+      };
+    }
+    
+    return sections;
+  };
+
+  // Function to generate preview from LaTeX content
+  const generatePreviewFromLatex = (latexContent) => {
+    try {
+      console.log('Generating preview from LaTeX content');
+      
+      // Extract and clean text content from LaTeX with better parsing
+      let text = latexContent
+        // Remove LaTeX document structure
+        .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
+        .replace(/\\end\{document\}/g, '')
+        // Remove package imports
+        .replace(/\\usepackage[^}]*/g, '')
+        // Remove LaTeX commands with braces but keep content
+        .replace(/\\textbf\{([^}]*)\}/g, '$1')
+        .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
+        .replace(/\\href\{([^}]*)\}/g, '$1')
+        // Remove other LaTeX commands
+        .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
+        .replace(/\\[a-zA-Z]+/g, '')
+        // Remove special LaTeX characters
+        .replace(/[{}]/g, '')
+        .replace(/\\\\(?!\\)/g, '\n')
+        .replace(/\\\\/g, '\n')
+        .replace(/\\vspace\{[^}]*\}/g, '\n\n')
+        // Clean up whitespace
+        .replace(/\s+/g, ' ')
+        .replace(/\n\s*\n/g, '\n\n')
+        .trim();
+
+      // Parse the content into structured sections
+      const sections = parseCoverLetterSections(text);
+      
+      // Generate formatted preview HTML
+      let previewHTML = '<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6;">';
+      
+      // Add personal information
+      if (sections.personalInfo) {
+        previewHTML += `<div style="margin-bottom: 20px;">
+          <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">${sections.personalInfo.name || ''}</div>
+          <div style="font-size: 12px; color: #666;">`;
+        
+        if (sections.personalInfo.email) previewHTML += `<div>${sections.personalInfo.email}</div>`;
+        if (sections.personalInfo.phone) previewHTML += `<div>${sections.personalInfo.phone}</div>`;
+        if (sections.personalInfo.linkedin) previewHTML += `<div>LinkedIn: ${sections.personalInfo.linkedin}</div>`;
+        if (sections.personalInfo.github) previewHTML += `<div>GitHub: ${sections.personalInfo.github}</div>`;
+        if (sections.personalInfo.portfolio) previewHTML += `<div>Portfolio: ${sections.personalInfo.portfolio}</div>`;
+        
+        previewHTML += `</div></div>`;
+      }
+      
+      // Add date
+      if (sections.date) {
+        previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">${sections.date}</div>`;
+      }
+      
+      // Add hiring manager and company
+      if (sections.hiringManager || sections.company) {
+        previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">`;
+        if (sections.hiringManager) previewHTML += `<div>${sections.hiringManager}</div>`;
+        if (sections.company) previewHTML += `<div>${sections.company}</div>`;
+        previewHTML += `</div>`;
+      }
+      
+      // Add subject
+      if (sections.subject) {
+        previewHTML += `<div style="margin-bottom: 20px; font-weight: bold; font-size: 14px;">${sections.subject}</div>`;
+      }
+      
+      // Add greeting
+      if (sections.greeting) {
+        previewHTML += `<div style="margin-bottom: 20px;">${sections.greeting}</div>`;
+      }
+      
+      // Add body
+      if (sections.body) {
+        previewHTML += `<div style="margin-bottom: 20px; text-align: justify;">${sections.body.replace(/\n/g, '<br>')}</div>`;
+      }
+      
+      // Add closing
+      if (sections.closing) {
+        previewHTML += `<div style="margin-top: 20px;">${sections.closing}</div>`;
+      }
+      
+      previewHTML += '</div>';
+      
+      console.log('Preview generated successfully');
+      return previewHTML;
+    } catch (error) {
+      console.error('Error generating preview from LaTeX:', error);
+      return '<div style="color: red;">Error generating preview</div>';
     }
   };
 
@@ -736,25 +991,28 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
                           <Box sx={{ p: 4, textAlign: 'center' }}>
                             <CircularProgress size={40} sx={{ mb: 2 }} />
                             <Typography variant="body2" color="text.secondary">
-                              Generating PDF preview...
+                              Generating preview...
                             </Typography>
                           </Box>
-                        ) : previewUrl ? (
-                          <iframe
-                            src={previewUrl}
-                            style={{
-                              width: '100%',
-                              height: '600px',
-                              border: 'none',
-                              borderRadius: '8px'
-                            }}
-                            title="Cover Letter PDF Preview"
-                          />
+                        ) : formattedPreview ? (
+                          <Box sx={{
+                            backgroundColor: 'white',
+                            minHeight: '600px',
+                            overflow: 'auto'
+                          }}>
+                            <div 
+                              dangerouslySetInnerHTML={{ __html: formattedPreview }}
+                              style={{
+                                padding: '20px',
+                                fontFamily: 'Arial, sans-serif'
+                              }}
+                            />
+                          </Box>
                         ) : (
                           <Box sx={{ p: 4, textAlign: 'center' }}>
                             <PdfIcon sx={{ fontSize: 48, color: '#9ca3af', mb: 2 }} />
                             <Typography variant="body2" color="text.secondary">
-                              PDF preview will appear here
+                              Preview will appear here
                             </Typography>
                           </Box>
                         )}
