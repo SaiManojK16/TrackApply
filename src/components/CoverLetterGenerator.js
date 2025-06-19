@@ -17,6 +17,7 @@ import {
   CardContent,
   Divider,
   Chip,
+  Snackbar,
 } from '@mui/material';
 import { 
   Description as DescriptionIcon,
@@ -49,6 +50,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
   const [error, setError] = useState('');
   const [pdfLoading, setPdfLoading] = useState(false);
   const [showLatex, setShowLatex] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const theme = useTheme();
   const fileInputRef = useRef(null);
@@ -123,8 +125,14 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
           setPdfLoading(true);
           // Use the preview endpoint with GET request and query parameter
           const encodedLatex = encodeURIComponent(response.data.coverLetterLatex);
-          const previewUrl = `/api/preview-pdf?latex=${encodedLatex}`;
-          setPreviewUrl(previewUrl);
+          const previewResponse = await axios.get(`/api/preview-pdf?latex=${encodedLatex}`);
+          
+          if (previewResponse.data.success && previewResponse.data.textContent) {
+            // Store the text content for display
+            setPreviewUrl(previewResponse.data.textContent);
+          } else {
+            throw new Error('Failed to get preview content');
+          }
         } catch (pdfError) {
           console.error('PDF generation failed:', pdfError);
           setError('Failed to generate PDF preview');
@@ -147,22 +155,39 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       try {
         const response = await axios.post('/api/generate-pdf', {
           latexContent: coverLetter
-        }, {
-          responseType: 'blob'
         });
         
-        const blob = new Blob([response.data], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `cover-letter-${formData.companyName || 'document'}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        if (response.data.success && response.data.textContent) {
+          // Create a simple text-based document for download
+          const textContent = response.data.textContent;
+          const filename = response.data.filename || `cover-letter-${formData.companyName || 'document'}.txt`;
+          
+          // Create a blob with the text content
+          const blob = new Blob([textContent], { type: 'text/plain' });
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          
+          setSnackbar({
+            open: true,
+            message: 'Cover letter downloaded successfully!',
+            severity: 'success'
+          });
+        } else {
+          throw new Error('No text content received');
+        }
       } catch (error) {
         console.error('Download failed:', error);
-        setError('Failed to download PDF');
+        setSnackbar({
+          open: true,
+          message: 'Failed to download cover letter',
+          severity: 'error'
+        });
       }
     }
   };
@@ -579,15 +604,28 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
                             </Typography>
                           </Box>
                         ) : previewUrl ? (
-                          <iframe
-                            src={previewUrl}
-                            style={{
-                              width: '100%',
-                              height: '600px',
-                              border: 'none'
-                            }}
-                            title="Cover Letter Preview"
-                          />
+                          <Box sx={{
+                            p: 3,
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 2,
+                            maxHeight: '600px',
+                            overflow: 'auto'
+                          }}>
+                            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#1e293b' }}>
+                              Cover Letter Preview
+                            </Typography>
+                            <Typography 
+                              variant="body1" 
+                              sx={{ 
+                                whiteSpace: 'pre-wrap',
+                                lineHeight: 1.6,
+                                color: '#374151'
+                              }}
+                            >
+                              {previewUrl}
+                            </Typography>
+                          </Box>
                         ) : (
                           <Box sx={{ p: 4, textAlign: 'center' }}>
                             <PdfIcon sx={{ fontSize: 48, color: '#9ca3af', mb: 2 }} />
@@ -621,6 +659,15 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
           </Grid>
         </Grid>
       </Container>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

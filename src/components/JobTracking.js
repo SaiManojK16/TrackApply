@@ -116,16 +116,38 @@ const JobTracking = ({ user }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setSnackbar({
+          open: true,
+          message: 'Please log in to view job applications',
+          severity: 'error'
+        });
+        return;
+      }
+      
       const response = await axios.get('/api/job-applications', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setApplications(response.data.applications);
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: 'Failed to fetch applications',
-        severity: 'error'
-      });
+      console.error('Fetch applications error:', error);
+      if (error.response?.status === 401) {
+        setSnackbar({
+          open: true,
+          message: 'Session expired. Please log in again.',
+          severity: 'error'
+        });
+        // Clear invalid token
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      } else {
+        setSnackbar({
+          open: true,
+          message: 'Failed to fetch applications',
+          severity: 'error'
+        });
+      }
     } finally {
       setLoading(false);
     }

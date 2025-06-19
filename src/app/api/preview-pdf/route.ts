@@ -23,14 +23,25 @@ export async function GET(request: NextRequest) {
       } catch (secondError) {
         console.error('Second decode attempt failed:', secondError);
         try {
-          // Try with a more lenient approach
-          decodedLatex = latexContent.replace(/\+/g, ' ').replace(/%20/g, ' ');
+          // Try with a more lenient approach - replace problematic characters
+          let cleanedContent = latexContent
+            .replace(/\+/g, ' ')
+            .replace(/%20/g, ' ')
+            .replace(/%0A/g, '\n')
+            .replace(/%0D/g, '\r')
+            .replace(/%09/g, '\t');
+          
+          // Try to decode the cleaned content
+          decodedLatex = decodeURIComponent(cleanedContent);
         } catch (finalError) {
           console.error('All decode attempts failed:', finalError);
-          return NextResponse.json({ 
-            error: 'Invalid LaTeX content encoding',
-            details: 'The LaTeX content contains invalid characters that cannot be decoded'
-          }, { status: 400 });
+          // As a last resort, return the raw content
+          decodedLatex = latexContent
+            .replace(/\+/g, ' ')
+            .replace(/%20/g, ' ')
+            .replace(/%0A/g, '\n')
+            .replace(/%0D/g, '\r')
+            .replace(/%09/g, '\t');
         }
       }
     }
