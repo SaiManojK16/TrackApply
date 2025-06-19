@@ -899,10 +899,8 @@ function App() {
 
     const fetchDashboardStats = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get('/api/job-applications', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // Use axios interceptor instead of manual headers
+        const response = await axios.get('/api/job-applications');
         const applications = response.data.applications || [];
         
         const stats = {
@@ -924,6 +922,14 @@ function App() {
         setDashboardStats(stats);
       } catch (error) {
         console.error('Failed to fetch dashboard stats:', error);
+        if (error.response?.status === 401) {
+          // Clear invalid token and redirect to login
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          setUser(null);
+          setToken(null);
+          setCurrentPage('home');
+        }
       }
     };
 

@@ -31,7 +31,9 @@ import {
   Work as WorkIcon,
   Business as BusinessIcon
 } from '@mui/icons-material';
+import { Snackbar, Alert as MuiAlert } from '@mui/material';
 import axios from 'axios';
+import jsPDF from 'jspdf';
 
 const placeholderAvatar = 'https://www.w3schools.com/howto/img_avatar.png';
 
@@ -107,8 +109,11 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
 
       const response = await axios.post('/api/generate-cover-letter', requestData);
       
+      console.log('Cover letter response:', response.data);
+      
       if (response.data.coverLetterLatex) {
         setCoverLetter(response.data.coverLetterLatex);
+        console.log('Cover letter set:', response.data.coverLetterLatex.substring(0, 200) + '...');
         
         // Increment generation count for users without unlimited access
         if (user && !user.hasUnlimitedAccess) {
@@ -123,15 +128,15 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         // Generate PDF preview
         try {
           setPdfLoading(true);
-          // Use the preview endpoint with GET request and query parameter
-          const encodedLatex = encodeURIComponent(response.data.coverLetterLatex);
-          const previewResponse = await axios.get(`/api/preview-pdf?latex=${encodedLatex}`);
           
-          if (previewResponse.data.success && previewResponse.data.textContent) {
-            // Store the text content for display
-            setPreviewUrl(previewResponse.data.textContent);
+          // Generate PDF from LaTeX content
+          const pdfUrl = generatePDFFromLatex(response.data.coverLetterLatex);
+          
+          if (pdfUrl) {
+            setPreviewUrl(pdfUrl);
+            console.log('PDF preview generated successfully');
           } else {
-            throw new Error('Failed to get preview content');
+            throw new Error('Failed to generate PDF preview');
           }
         } catch (pdfError) {
           console.error('PDF generation failed:', pdfError);
@@ -140,6 +145,7 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
           setPdfLoading(false);
         }
       } else {
+        console.error('No coverLetterLatex in response:', response.data);
         setError(response.data.error || 'Failed to generate cover letter');
       }
     } catch (error) {
@@ -153,34 +159,59 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
   const handleDownload = async () => {
     if (coverLetter) {
       try {
-        const response = await axios.post('/api/generate-pdf', {
-          latexContent: coverLetter
-        });
+        // Generate PDF from LaTeX content
+        const pdf = new jsPDF();
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const margin = 20;
+        const maxWidth = pageWidth - (2 * margin);
         
-        if (response.data.success && response.data.textContent) {
-          // Create a simple text-based document for download
-          const textContent = response.data.textContent;
-          const filename = response.data.filename || `cover-letter-${formData.companyName || 'document'}.txt`;
-          
-          // Create a blob with the text content
-          const blob = new Blob([textContent], { type: 'text/plain' });
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-          
-          setSnackbar({
-            open: true,
-            message: 'Cover letter downloaded successfully!',
-            severity: 'success'
-          });
-        } else {
-          throw new Error('No text content received');
+        // Extract text content from LaTeX
+        let text = coverLetter
+          .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
+          .replace(/\\end\{document\}/g, '')
+          .replace(/\\usepackage[^}]*/g, '')
+          .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
+          .replace(/\\[a-zA-Z]+/g, '')
+          .replace(/[{}]/g, '')
+          .replace(/\\\\(?!\\)/g, '\n')
+          .replace(/\\\\/g, '\n')
+          .replace(/\\vspace\{[^}]*\}/g, '\n\n')
+          .replace(/\\textbf\{([^}]*)\}/g, '$1')
+          .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
+          .replace(/\\href\{([^}]*)\}/g, '$1')
+          .replace(/\s+/g, ' ')
+          .replace(/\n\s*\n/g, '\n\n')
+          .trim();
+        
+        // Set font
+        pdf.setFont('helvetica');
+        pdf.setFontSize(12);
+        
+        // Split text into lines
+        const lines = pdf.splitTextToSize(text, maxWidth);
+        
+        let yPosition = 30;
+        const lineHeight = 7;
+        
+        // Add content to PDF
+        for (let i = 0; i < lines.length; i++) {
+          if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
+            pdf.addPage();
+            yPosition = 20;
+          }
+          pdf.text(lines[i], margin, yPosition);
+          yPosition += lineHeight;
         }
+        
+        // Download the PDF
+        const filename = `cover-letter-${formData.companyName || 'document'}.pdf`;
+        pdf.save(filename);
+        
+        setSnackbar({
+          open: true,
+          message: 'Cover letter downloaded successfully!',
+          severity: 'success'
+        });
       } catch (error) {
         console.error('Download failed:', error);
         setSnackbar({
@@ -205,6 +236,64 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
     setPreviewUrl('');
     setError('');
     setShowLatex(false);
+  };
+
+  // Function to convert LaTeX content to PDF
+  const generatePDFFromLatex = (latexContent) => {
+    try {
+      // Extract text content from LaTeX
+      let text = latexContent
+        .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
+        .replace(/\\end\{document\}/g, '')
+        .replace(/\\usepackage[^}]*/g, '')
+        .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
+        .replace(/\\[a-zA-Z]+/g, '')
+        .replace(/[{}]/g, '')
+        .replace(/\\\\(?!\\)/g, '\n')
+        .replace(/\\\\/g, '\n')
+        .replace(/\\vspace\{[^}]*\}/g, '\n\n')
+        .replace(/\\textbf\{([^}]*)\}/g, '$1')
+        .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
+        .replace(/\\href\{([^}]*)\}/g, '$1')
+        .replace(/\s+/g, ' ')
+        .replace(/\n\s*\n/g, '\n\n')
+        .trim();
+
+      // Create PDF
+      const pdf = new jsPDF();
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const margin = 20;
+      const maxWidth = pageWidth - (2 * margin);
+      
+      // Set font
+      pdf.setFont('helvetica');
+      pdf.setFontSize(12);
+      
+      // Split text into lines
+      const lines = pdf.splitTextToSize(text, maxWidth);
+      
+      let yPosition = 30;
+      const lineHeight = 7;
+      
+      // Add content to PDF
+      for (let i = 0; i < lines.length; i++) {
+        if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+        pdf.text(lines[i], margin, yPosition);
+        yPosition += lineHeight;
+      }
+      
+      // Generate PDF blob
+      const pdfBlob = pdf.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      
+      return pdfUrl;
+    } catch (error) {
+      console.error('Error generating PDF from LaTeX:', error);
+      return null;
+    }
   };
 
   return (
@@ -604,28 +693,16 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
                             </Typography>
                           </Box>
                         ) : previewUrl ? (
-                          <Box sx={{
-                            p: 3,
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 2,
-                            maxHeight: '600px',
-                            overflow: 'auto'
-                          }}>
-                            <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, color: '#1e293b' }}>
-                              Cover Letter Preview
-                            </Typography>
-                            <Typography 
-                              variant="body1" 
-                              sx={{ 
-                                whiteSpace: 'pre-wrap',
-                                lineHeight: 1.6,
-                                color: '#374151'
-                              }}
-                            >
-                              {previewUrl}
-                            </Typography>
-                          </Box>
+                          <iframe
+                            src={previewUrl}
+                            style={{
+                              width: '100%',
+                              height: '600px',
+                              border: 'none',
+                              borderRadius: '8px'
+                            }}
+                            title="Cover Letter PDF Preview"
+                          />
                         ) : (
                           <Box sx={{ p: 4, textAlign: 'center' }}>
                             <PdfIcon sx={{ fontSize: 48, color: '#9ca3af', mb: 2 }} />
@@ -664,9 +741,9 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+        <MuiAlert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
           {snackbar.message}
-        </Alert>
+        </MuiAlert>
       </Snackbar>
     </Box>
   );

@@ -115,20 +115,9 @@ const JobTracking = ({ user }) => {
   const fetchApplications = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       
-      if (!token) {
-        setSnackbar({
-          open: true,
-          message: 'Please log in to view job applications',
-          severity: 'error'
-        });
-        return;
-      }
-      
-      const response = await axios.get('/api/job-applications', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      // Use axios interceptor instead of manual headers
+      const response = await axios.get('/api/job-applications');
       setApplications(response.data.applications);
     } catch (error) {
       console.error('Fetch applications error:', error);
@@ -141,6 +130,8 @@ const JobTracking = ({ user }) => {
         // Clear invalid token
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        // Redirect to home/login
+        window.location.reload();
       } else {
         setSnackbar({
           open: true,
@@ -160,34 +151,47 @@ const JobTracking = ({ user }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
+
     try {
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
-
-      if (editingApplication) {
-        await axios.put(`/api/job-applications/${editingApplication._id}`, formData, { headers });
-        setSnackbar({
-          open: true,
-          message: 'Application updated successfully!',
-          severity: 'success'
-        });
-      } else {
-        await axios.post('/api/job-applications', formData, { headers });
-        setSnackbar({
-          open: true,
-          message: 'Application added successfully!',
-          severity: 'success'
-        });
-      }
-
-      handleCloseDialog();
-      fetchApplications();
-    } catch (error) {
+      const response = await axios.post('/api/job-applications', formData);
       setSnackbar({
         open: true,
-        message: error.response?.data?.error || 'Failed to save application',
-        severity: 'error'
+        message: 'Job application added successfully!',
+        severity: 'success'
       });
+      setFormData({
+        companyName: '',
+        jobTitle: '',
+        jobDescription: '',
+        applicationDate: '',
+        applicationStatus: 'Applied',
+        notes: '',
+        jobUrl: '',
+        salary: '',
+        location: '',
+        contactPerson: '',
+        contactEmail: ''
+      });
+      setShowAddForm(false);
+      fetchApplications();
+    } catch (error) {
+      console.error('Add application error:', error);
+      if (error.response?.status === 401) {
+        setSnackbar({
+          open: true,
+          message: 'Session expired. Please log in again.',
+          severity: 'error'
+        });
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.reload();
+      } else {
+        setError(error.response?.data?.error || 'Failed to add application');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -213,10 +217,7 @@ const JobTracking = ({ user }) => {
   const handleDelete = async (applicationId) => {
     if (window.confirm('Are you sure you want to delete this application?')) {
       try {
-        const token = localStorage.getItem('token');
-        await axios.delete(`/api/job-applications/${applicationId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        await axios.delete(`/api/job-applications/${applicationId}`);
         setSnackbar({
           open: true,
           message: 'Application deleted successfully!',
@@ -224,11 +225,23 @@ const JobTracking = ({ user }) => {
         });
         fetchApplications();
       } catch (error) {
-        setSnackbar({
-          open: true,
-          message: 'Failed to delete application',
-          severity: 'error'
-        });
+        console.error('Delete application error:', error);
+        if (error.response?.status === 401) {
+          setSnackbar({
+            open: true,
+            message: 'Session expired. Please log in again.',
+            severity: 'error'
+          });
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.reload();
+        } else {
+          setSnackbar({
+            open: true,
+            message: 'Failed to delete application',
+            severity: 'error'
+          });
+        }
       }
     }
   };
@@ -242,15 +255,12 @@ const JobTracking = ({ user }) => {
       });
       setEmailDialog(true);
 
-      const token = localStorage.getItem('token');
       const response = await axios.post('/api/generate-email', {
         jobTitle: application.jobTitle,
         companyName: application.companyName,
         jobDescription: application.jobDescription,
         hiringManagerName: '',
         hiringManagerEmail: ''
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
 
       setEmailData({
@@ -258,11 +268,23 @@ const JobTracking = ({ user }) => {
         application: application
       });
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: error.response?.data?.error || 'Failed to generate email',
-        severity: 'error'
-      });
+      console.error('Generate email error:', error);
+      if (error.response?.status === 401) {
+        setSnackbar({
+          open: true,
+          message: 'Session expired. Please log in again.',
+          severity: 'error'
+        });
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.reload();
+      } else {
+        setSnackbar({
+          open: true,
+          message: error.response?.data?.error || 'Failed to generate email',
+          severity: 'error'
+        });
+      }
       setEmailDialog(false);
     } finally {
       setEmailLoading(false);
@@ -279,15 +301,12 @@ const JobTracking = ({ user }) => {
     
     try {
       setEmailLoading(true);
-      const token = localStorage.getItem('token');
       const response = await axios.post('/api/generate-email', {
         jobTitle: emailData.application.jobTitle,
         companyName: emailData.application.companyName,
         jobDescription: emailData.application.jobDescription,
         hiringManagerName: emailFormData.hiringManagerName,
         hiringManagerEmail: emailFormData.hiringManagerEmail
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
 
       setEmailData({
@@ -295,11 +314,23 @@ const JobTracking = ({ user }) => {
         application: emailData.application
       });
     } catch (error) {
-      setSnackbar({
-        open: true,
-        message: error.response?.data?.error || 'Failed to regenerate email',
-        severity: 'error'
-      });
+      console.error('Regenerate email error:', error);
+      if (error.response?.status === 401) {
+        setSnackbar({
+          open: true,
+          message: 'Session expired. Please log in again.',
+          severity: 'error'
+        });
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.reload();
+      } else {
+        setSnackbar({
+          open: true,
+          message: error.response?.data?.error || 'Failed to regenerate email',
+          severity: 'error'
+        });
+      }
     } finally {
       setEmailLoading(false);
     }

@@ -76,20 +76,86 @@ export async function GET(request: NextRequest) {
 // Helper function to extract text content from LaTeX
 function extractTextFromLatex(latexContent: string): string {
   try {
-    // Remove LaTeX commands and extract plain text
+    console.log('Extracting text from LaTeX, length:', latexContent.length);
+    
+    // Remove LaTeX document structure
     let text = latexContent
-      // Remove LaTeX document structure
       .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
       .replace(/\\end\{document\}/g, '')
-      // Remove common LaTeX commands
+      // Remove package imports
+      .replace(/\\usepackage[^}]*/g, '')
+      // Remove LaTeX commands with braces
       .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
+      // Remove LaTeX commands without braces
       .replace(/\\[a-zA-Z]+/g, '')
-      // Remove special characters
+      // Remove special LaTeX characters
       .replace(/[{}]/g, '')
+      .replace(/\\\\(?!\\)/g, '\n') // Convert \\ to newlines (but not \\\)
+      .replace(/\\\\/g, '\n') // Convert \\\ to newlines
+      .replace(/\\vspace\{[^}]*\}/g, '\n\n') // Convert vspace to double newlines
+      .replace(/\\textbf\{([^}]*)\}/g, '$1') // Remove bold formatting
+      .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1') // Extract text from href
+      .replace(/\\href\{([^}]*)\}/g, '$1') // Handle href without text
       // Clean up whitespace
       .replace(/\s+/g, ' ')
+      .replace(/\n\s*\n/g, '\n\n') // Clean up multiple newlines
       .trim();
 
+    console.log('Initial text extraction result:', text.substring(0, 200) + '...');
+
+    // If the text is still mostly LaTeX commands, try a more aggressive approach
+    if (text.length < 50 || text.includes('\\')) {
+      console.log('Text too short or contains LaTeX commands, trying aggressive extraction');
+      
+      // Extract only the content between \begin{document} and \end{document}
+      const documentMatch = latexContent.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
+      if (documentMatch) {
+        text = documentMatch[1]
+          .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
+          .replace(/\\[a-zA-Z]+/g, '')
+          .replace(/[{}]/g, '')
+          .replace(/\\\\(?!\\)/g, '\n')
+          .replace(/\\\\/g, '\n')
+          .replace(/\\vspace\{[^}]*\}/g, '\n\n')
+          .replace(/\\textbf\{([^}]*)\}/g, '$1')
+          .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
+          .replace(/\\href\{([^}]*)\}/g, '$1')
+          .replace(/\s+/g, ' ')
+          .replace(/\n\s*\n/g, '\n\n')
+          .trim();
+        
+        console.log('Aggressive extraction result:', text.substring(0, 200) + '...');
+      }
+    }
+
+    // If still no good text, try to extract just the body paragraphs
+    if (text.length < 100) {
+      console.log('Still no good text, trying to extract body paragraphs');
+      
+      // Look for the body content specifically
+      const bodyMatch = latexContent.match(/Dear[^}]*?,\s*([\s\S]*?)\\vspace\{1\.5em\}/);
+      if (bodyMatch) {
+        text = bodyMatch[1]
+          .replace(/\\\\(?!\\)/g, '\n')
+          .replace(/\\\\/g, '\n')
+          .replace(/\\textbf\{([^}]*)\}/g, '$1')
+          .replace(/[{}]/g, '')
+          .replace(/\s+/g, ' ')
+          .replace(/\n\s*\n/g, '\n\n')
+          .trim();
+        
+        console.log('Body extraction result:', text.substring(0, 200) + '...');
+      }
+    }
+
+    // Final cleanup
+    text = text
+      .replace(/\n{3,}/g, '\n\n') // Remove excessive newlines
+      .replace(/^\s+|\s+$/g, '') // Trim whitespace
+      .replace(/\s+/g, ' '); // Normalize spaces
+
+    console.log('Final text result:', text.substring(0, 200) + '...');
+    
     return text || 'No text content could be extracted';
   } catch (error) {
     console.error('Error extracting text from LaTeX:', error);
