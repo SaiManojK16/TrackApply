@@ -120,8 +120,10 @@ function App() {
   // Set up axios interceptor to include auth token
   useEffect(() => {
     if (token) {
+      console.log('Setting axios authorization header with token:', token.substring(0, 20) + '...');
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     } else {
+      console.log('Removing axios authorization header');
       delete axios.defaults.headers.common['Authorization'];
     }
   }, [token]);
@@ -236,11 +238,14 @@ function App() {
   };
 
   const handleLogin = (userData, userToken) => {
+    console.log('Login successful - User data:', userData);
+    console.log('Login successful - Token received:', userToken ? userToken.substring(0, 20) + '...' : 'No token');
+    
     setUser(userData);
     setToken(userToken);
     setShowAuth(false);
     setAuthMode('login');
-    setCurrentPage('tracking');
+    setCurrentPage('home'); // Changed from 'tracking' to 'home' (dashboard)
     
     // Pre-fill form with user data
     setFormData(prev => ({
@@ -256,6 +261,8 @@ function App() {
     // Save to localStorage
     localStorage.setItem('token', userToken);
     localStorage.setItem('user', JSON.stringify(userData));
+    
+    console.log('Token saved to localStorage');
     
     setSnackbar({ open: true, message: 'Login successful!', severity: 'success' });
   };
@@ -265,7 +272,7 @@ function App() {
     setToken(userToken);
     setShowAuth(false);
     setAuthMode('register');
-    setCurrentPage('tracking');
+    setCurrentPage('home');
     
     // Pre-fill form with user data
     setFormData(prev => ({
@@ -282,7 +289,7 @@ function App() {
     localStorage.setItem('token', userToken);
     localStorage.setItem('user', JSON.stringify(userData));
     
-    // Show welcome banner and redirect to job tracking
+    // Show welcome banner and redirect to dashboard
     setShowWelcomeBanner(true);
     
     setSnackbar({ open: true, message: 'Registration successful! Welcome to Cover Letter Generator!', severity: 'success' });
@@ -923,12 +930,17 @@ function App() {
       } catch (error) {
         console.error('Failed to fetch dashboard stats:', error);
         if (error.response?.status === 401) {
-          // Clear invalid token and redirect to login
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setUser(null);
-          setToken(null);
-          setCurrentPage('home');
+          console.log('401 error in dashboard stats - token might be invalid');
+          // Don't immediately log out - just show empty stats
+          setDashboardStats({
+            totalApplications: 0,
+            interviews: 0,
+            pending: 0,
+            rejected: 0
+          });
+        } else {
+          // For other errors, just log them
+          console.error('Dashboard stats error:', error);
         }
       }
     };
