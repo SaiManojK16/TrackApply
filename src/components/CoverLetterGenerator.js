@@ -248,46 +248,17 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
     try {
       console.log('=== PDF GENERATION START ===');
       console.log('Original LaTeX content length:', latexContent.length);
-      console.log('Original LaTeX content (first 500 chars):', latexContent.substring(0, 500));
       
-      // Extract and clean text content from LaTeX with better parsing
-      let text = latexContent
-        // Remove LaTeX document structure
-        .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
-        .replace(/\\end\{document\}/g, '')
-        // Remove package imports
-        .replace(/\\usepackage[^}]*/g, '')
-        // Remove LaTeX commands with braces but keep content
-        .replace(/\\textbf\{([^}]*)\}/g, '$1')
-        .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
-        .replace(/\\href\{([^}]*)\}/g, '$1')
-        // Remove other LaTeX commands
-        .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-        .replace(/\\[a-zA-Z]+/g, '')
-        // Remove special LaTeX characters
-        .replace(/[{}]/g, '')
-        .replace(/\\\\(?!\\)/g, '\n')
-        .replace(/\\\\/g, '\n')
-        .replace(/\\vspace\{[^}]*\}/g, '\n\n')
-        // Clean up whitespace
-        .replace(/\s+/g, ' ')
-        .replace(/\n\s*\n/g, '\n\n')
-        .trim();
-
-      console.log('Cleaned text length:', text.length);
-      console.log('Cleaned text (first 500 chars):', text.substring(0, 500));
-
-      // Check if text is empty after cleaning
-      if (!text || text.trim() === '') {
-        console.error('No text content found after LaTeX cleaning');
+      // Extract content directly from LaTeX template structure
+      const extractedContent = extractContentFromLatex(latexContent);
+      console.log('Extracted content:', extractedContent);
+      
+      if (!extractedContent) {
+        console.error('Failed to extract content from LaTeX');
         return null;
       }
-
-      // Parse the content into structured sections
-      const sections = parseCoverLetterSections(text);
-      console.log('Parsed sections:', sections);
       
-      // Create PDF with proper formatting
+      // Create PDF with extracted content
       const pdf = new jsPDF();
       const pageWidth = pdf.internal.pageSize.getWidth();
       const margin = 20;
@@ -297,61 +268,59 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       const lineHeight = 7;
       
       // Add personal information
-      if (sections.personalInfo) {
-        console.log('Adding personal info:', sections.personalInfo);
-        pdf.setFontSize(12);
+      if (extractedContent.name) {
+        pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
-        const nameLines = pdf.splitTextToSize(sections.personalInfo.name || '', maxWidth);
+        const nameLines = pdf.splitTextToSize(extractedContent.name, maxWidth);
         for (let line of nameLines) {
           pdf.text(line, margin, yPosition);
           yPosition += lineHeight;
         }
-        
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        const contactLines = [
-          sections.personalInfo.email,
-          sections.personalInfo.phone,
-          sections.personalInfo.linkedin,
-          sections.personalInfo.github,
-          sections.personalInfo.portfolio
-        ].filter(Boolean);
-        
-        for (let line of contactLines) {
-          pdf.text(line, margin, yPosition);
-          yPosition += lineHeight;
-        }
-        
-        yPosition += lineHeight * 2;
+        yPosition += lineHeight;
       }
       
+      // Add contact information
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      const contactInfo = [
+        extractedContent.email,
+        extractedContent.phone,
+        extractedContent.linkedin ? `LinkedIn: ${extractedContent.linkedin}` : '',
+        extractedContent.github ? `GitHub: ${extractedContent.github}` : '',
+        extractedContent.portfolio ? `Portfolio: ${extractedContent.portfolio}` : ''
+      ].filter(Boolean);
+      
+      for (let info of contactInfo) {
+        pdf.text(info, margin, yPosition);
+        yPosition += lineHeight;
+      }
+      
+      yPosition += lineHeight * 2;
+      
       // Add date
-      if (sections.date) {
-        console.log('Adding date:', sections.date);
-        pdf.setFontSize(10);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(sections.date, margin, yPosition);
+      if (extractedContent.date) {
+        pdf.text(extractedContent.date, margin, yPosition);
         yPosition += lineHeight * 2;
       }
       
       // Add hiring manager and company
-      if (sections.hiringManager || sections.company) {
-        console.log('Adding hiring manager/company:', { hiringManager: sections.hiringManager, company: sections.company });
-        const managerCompany = [sections.hiringManager, sections.company].filter(Boolean).join('\n');
-        const lines = pdf.splitTextToSize(managerCompany, maxWidth);
-        for (let line of lines) {
-          pdf.text(line, margin, yPosition);
+      if (extractedContent.hiringManager || extractedContent.company) {
+        if (extractedContent.hiringManager) {
+          pdf.text(extractedContent.hiringManager, margin, yPosition);
           yPosition += lineHeight;
         }
-        yPosition += lineHeight * 2;
+        if (extractedContent.company) {
+          pdf.text(extractedContent.company, margin, yPosition);
+          yPosition += lineHeight;
+        }
+        yPosition += lineHeight;
       }
       
       // Add subject
-      if (sections.subject) {
-        console.log('Adding subject:', sections.subject);
+      if (extractedContent.subject) {
         pdf.setFontSize(12);
         pdf.setFont('helvetica', 'bold');
-        const subjectLines = pdf.splitTextToSize(sections.subject, maxWidth);
+        const subjectLines = pdf.splitTextToSize(extractedContent.subject, maxWidth);
         for (let line of subjectLines) {
           pdf.text(line, margin, yPosition);
           yPosition += lineHeight;
@@ -360,20 +329,18 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       }
       
       // Add greeting
-      if (sections.greeting) {
-        console.log('Adding greeting:', sections.greeting);
+      if (extractedContent.greeting) {
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'normal');
-        pdf.text(sections.greeting, margin, yPosition);
+        pdf.text(extractedContent.greeting, margin, yPosition);
         yPosition += lineHeight * 2;
       }
       
       // Add body
-      if (sections.body) {
-        console.log('Adding body (first 100 chars):', sections.body.substring(0, 100));
+      if (extractedContent.body) {
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'normal');
-        const bodyLines = pdf.splitTextToSize(sections.body, maxWidth);
+        const bodyLines = pdf.splitTextToSize(extractedContent.body, maxWidth);
         for (let line of bodyLines) {
           if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
             pdf.addPage();
@@ -386,11 +353,10 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
       }
       
       // Add closing
-      if (sections.closing) {
-        console.log('Adding closing:', sections.closing);
+      if (extractedContent.closing) {
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'normal');
-        const closingLines = pdf.splitTextToSize(sections.closing, maxWidth);
+        const closingLines = pdf.splitTextToSize(extractedContent.closing, maxWidth);
         for (let line of closingLines) {
           pdf.text(line, margin, yPosition);
           yPosition += lineHeight;
@@ -410,241 +376,197 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
     }
   };
 
-  // Helper function to parse cover letter sections
-  const parseCoverLetterSections = (text) => {
-    console.log('=== PARSING START ===');
-    console.log('Input text length:', text.length);
-    console.log('Input text (first 300 chars):', text.substring(0, 300));
-    
-    const sections = {};
-    
-    // Split text into lines
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
-    console.log('Total lines after filtering:', lines.length);
-    console.log('First 10 lines:', lines.slice(0, 10));
-    
-    let currentSection = '';
-    let currentContent = [];
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
+  // Function to extract content directly from LaTeX template
+  const extractContentFromLatex = (latexContent) => {
+    try {
+      console.log('=== CONTENT EXTRACTION START ===');
+      console.log('LaTeX content to extract from:', latexContent.substring(0, 500));
       
-      // Skip LaTeX comments
-      if (line.startsWith('%')) {
-        console.log(`Skipping comment line ${i}:`, line);
-        continue;
+      // Extract content using regex patterns based on our LaTeX template structure
+      const content = {};
+      
+      // Extract name from \textbf{{Name}}
+      const nameMatch = latexContent.match(/\\textbf\{\{\{Name\}\}\}/);
+      if (nameMatch) {
+        // Find the actual name value in the template
+        const nameValueMatch = latexContent.match(/\\textbf\{([^}]+)\}/);
+        content.name = nameValueMatch ? nameValueMatch[1] : '';
       }
       
-      // Detect sections
-      if (line.includes('Personal Information') || line.includes('Name:')) {
-        console.log(`Found Personal Information section at line ${i}:`, line);
-        if (currentSection && currentContent.length > 0) {
-          sections[currentSection] = currentContent.join(' ');
-          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
+      // Extract email from {{Email}}
+      const emailMatch = latexContent.match(/\{\{\{Email\}\}\}/);
+      if (emailMatch) {
+        // Find the actual email value
+        const emailValueMatch = latexContent.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+        content.email = emailValueMatch ? emailValueMatch[1] : '';
+      }
+      
+      // Extract phone from {{Phone}}
+      const phoneMatch = latexContent.match(/\{\{\{Phone\}\}\}/);
+      if (phoneMatch) {
+        // Find the actual phone value
+        const phoneValueMatch = latexContent.match(/(\d{10,})/);
+        content.phone = phoneValueMatch ? phoneValueMatch[1] : '';
+      }
+      
+      // Extract LinkedIn from {{LinkedIn}}
+      const linkedinMatch = latexContent.match(/\{\{\{LinkedIn\}\}\}/);
+      if (linkedinMatch) {
+        // Find the actual LinkedIn value
+        const linkedinValueMatch = latexContent.match(/(https?:\/\/[^\s]+linkedin[^\s]*)/i);
+        content.linkedin = linkedinValueMatch ? linkedinValueMatch[1] : '';
+      }
+      
+      // Extract GitHub from {{GitHub}}
+      const githubMatch = latexContent.match(/\{\{\{GitHub\}\}\}/);
+      if (githubMatch) {
+        // Find the actual GitHub value
+        const githubValueMatch = latexContent.match(/(https?:\/\/[^\s]+github[^\s]*)/i);
+        content.github = githubValueMatch ? githubValueMatch[1] : '';
+      }
+      
+      // Extract Portfolio from {{Portfolio}}
+      const portfolioMatch = latexContent.match(/\{\{\{Portfolio\}\}\}/);
+      if (portfolioMatch) {
+        // Find the actual portfolio value
+        const portfolioValueMatch = latexContent.match(/(https?:\/\/[^\s]+)/);
+        content.portfolio = portfolioValueMatch ? portfolioValueMatch[1] : '';
+      }
+      
+      // Extract date from {{Date}}
+      const dateMatch = latexContent.match(/\{\{\{Date\}\}\}/);
+      if (dateMatch) {
+        // Find the actual date value
+        const dateValueMatch = latexContent.match(/([A-Za-z]+\s+\d{1,2},\s+\d{4})/);
+        content.date = dateValueMatch ? dateValueMatch[1] : '';
+      }
+      
+      // Extract hiring manager from {{HiringManager}}
+      const hiringManagerMatch = latexContent.match(/\{\{\{HiringManager\}\}\}/);
+      if (hiringManagerMatch) {
+        content.hiringManager = 'Hiring Manager';
+      }
+      
+      // Extract company from {{Company}}
+      const companyMatch = latexContent.match(/\{\{\{Company\}\}\}/);
+      if (companyMatch) {
+        // Find the actual company value
+        const companyValueMatch = latexContent.match(/Position at ([^}]+)/);
+        content.company = companyValueMatch ? companyValueMatch[1] : '';
+      }
+      
+      // Extract position from {{Position}}
+      const positionMatch = latexContent.match(/\{\{\{Position\}\}\}/);
+      if (positionMatch) {
+        // Find the actual position value
+        const positionValueMatch = latexContent.match(/Application for ([^}]+) Position/);
+        content.position = positionValueMatch ? positionValueMatch[1] : '';
+      }
+      
+      // Extract subject
+      const subjectMatch = latexContent.match(/Application for ([^}]+) Position at ([^}]+)/);
+      if (subjectMatch) {
+        content.subject = `Application for ${subjectMatch[1]} Position at ${subjectMatch[2]}`;
+      }
+      
+      // Extract greeting
+      const greetingMatch = latexContent.match(/Dear ([^,]+),/);
+      if (greetingMatch) {
+        content.greeting = `Dear ${greetingMatch[1]},`;
+      }
+      
+      // Extract body from {{BodyParagraphs}}
+      const bodyMatch = latexContent.match(/\{\{\{BodyParagraphs\}\}\}/);
+      if (bodyMatch) {
+        // Find the actual body content
+        const bodyContentMatch = latexContent.match(/Dear[^}]*\},\s*\n\s*\n([\s\S]*?)\s*\n\s*Sincerely/);
+        if (bodyContentMatch) {
+          content.body = bodyContentMatch[1].replace(/\\\\(?!\\)/g, '\n').replace(/\\\\/g, '\n').trim();
         }
-        currentSection = 'personalInfo';
-        currentContent = [];
-        continue;
       }
       
-      if (line.includes('Date')) {
-        console.log(`Found Date section at line ${i}:`, line);
-        if (currentSection && currentContent.length > 0) {
-          sections[currentSection] = currentContent.join(' ');
-          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
-        }
-        currentSection = 'date';
-        currentContent = [];
-        continue;
+      // Extract closing
+      const closingMatch = latexContent.match(/Sincerely,\\\\\\([^}]+)/);
+      if (closingMatch) {
+        content.closing = `Sincerely,\n${closingMatch[1]}`;
       }
       
-      if (line.includes('Hiring Manager')) {
-        console.log(`Found Hiring Manager section at line ${i}:`, line);
-        if (currentSection && currentContent.length > 0) {
-          sections[currentSection] = currentContent.join(' ');
-          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
-        }
-        currentSection = 'hiringManager';
-        currentContent = [];
-        continue;
-      }
-      
-      if (line.includes('Subject')) {
-        console.log(`Found Subject section at line ${i}:`, line);
-        if (currentSection && currentContent.length > 0) {
-          sections[currentSection] = currentContent.join(' ');
-          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
-        }
-        currentSection = 'subject';
-        currentContent = [];
-        continue;
-      }
-      
-      if (line.includes('Greeting') || line.includes('Dear')) {
-        console.log(`Found Greeting section at line ${i}:`, line);
-        if (currentSection && currentContent.length > 0) {
-          sections[currentSection] = currentContent.join(' ');
-          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
-        }
-        currentSection = 'greeting';
-        currentContent = [];
-        continue;
-      }
-      
-      if (line.includes('Body')) {
-        console.log(`Found Body section at line ${i}:`, line);
-        if (currentSection && currentContent.length > 0) {
-          sections[currentSection] = currentContent.join(' ');
-          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
-        }
-        currentSection = 'body';
-        currentContent = [];
-        continue;
-      }
-      
-      if (line.includes('Closing') || line.includes('Sincerely')) {
-        console.log(`Found Closing section at line ${i}:`, line);
-        if (currentSection && currentContent.length > 0) {
-          sections[currentSection] = currentContent.join(' ');
-          console.log(`Saved section ${currentSection}:`, sections[currentSection]);
-        }
-        currentSection = 'closing';
-        currentContent = [];
-        continue;
-      }
-      
-      // Add content to current section
-      if (currentSection) {
-        currentContent.push(line);
-      }
+      console.log('Extracted content:', content);
+      console.log('=== CONTENT EXTRACTION END ===');
+      return content;
+    } catch (error) {
+      console.error('Error extracting content from LaTeX:', error);
+      return null;
     }
-    
-    // Add the last section
-    if (currentSection && currentContent.length > 0) {
-      sections[currentSection] = currentContent.join(' ');
-      console.log(`Saved final section ${currentSection}:`, sections[currentSection]);
-    }
-    
-    // Parse personal info into structured format
-    if (sections.personalInfo) {
-      console.log('Parsing personal info from:', sections.personalInfo);
-      const personalInfoText = sections.personalInfo;
-      sections.personalInfo = {
-        name: personalInfoText.match(/([A-Za-z\s]+)/)?.[1]?.trim() || '',
-        email: personalInfoText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0] || '',
-        phone: personalInfoText.match(/\d{10,}/)?.[0] || '',
-        linkedin: personalInfoText.match(/LinkedIn:\s*(https?:\/\/[^\s]+)/)?.[1] || '',
-        github: personalInfoText.match(/GitHub:\s*(https?:\/\/[^\s]+)/)?.[1] || '',
-        portfolio: personalInfoText.match(/Portfolio:\s*(https?:\/\/[^\s]+)/)?.[1] || ''
-      };
-      console.log('Parsed personal info:', sections.personalInfo);
-    }
-    
-    console.log('Final parsed sections:', sections);
-    console.log('=== PARSING END ===');
-    return sections;
   };
 
   // Function to generate preview from LaTeX content
   const generatePreviewFromLatex = (latexContent) => {
     try {
       console.log('=== PREVIEW GENERATION START ===');
-      console.log('Preview LaTeX content length:', latexContent.length);
-      console.log('Preview LaTeX content (first 500 chars):', latexContent.substring(0, 500));
       
-      // Extract and clean text content from LaTeX with better parsing
-      let text = latexContent
-        // Remove LaTeX document structure
-        .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
-        .replace(/\\end\{document\}/g, '')
-        // Remove package imports
-        .replace(/\\usepackage[^}]*/g, '')
-        // Remove LaTeX commands with braces but keep content
-        .replace(/\\textbf\{([^}]*)\}/g, '$1')
-        .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
-        .replace(/\\href\{([^}]*)\}/g, '$1')
-        // Remove other LaTeX commands
-        .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-        .replace(/\\[a-zA-Z]+/g, '')
-        // Remove special LaTeX characters
-        .replace(/[{}]/g, '')
-        .replace(/\\\\(?!\\)/g, '\n')
-        .replace(/\\\\/g, '\n')
-        .replace(/\\vspace\{[^}]*\}/g, '\n\n')
-        // Clean up whitespace
-        .replace(/\s+/g, ' ')
-        .replace(/\n\s*\n/g, '\n\n')
-        .trim();
-
-      console.log('Preview cleaned text length:', text.length);
-      console.log('Preview cleaned text (first 500 chars):', text.substring(0, 500));
-
-      // Parse the content into structured sections
-      const sections = parseCoverLetterSections(text);
-      console.log('Preview parsed sections:', sections);
+      // Extract content using the same function
+      const extractedContent = extractContentFromLatex(latexContent);
+      console.log('Preview extracted content:', extractedContent);
+      
+      if (!extractedContent) {
+        return '<div style="color: red;">Error extracting content from LaTeX</div>';
+      }
       
       // Generate formatted preview HTML
-      let previewHTML = '<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6;">';
+      let previewHTML = '<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; background: white;">';
       
       // Add personal information
-      if (sections.personalInfo) {
-        console.log('Preview: Adding personal info:', sections.personalInfo);
+      if (extractedContent.name) {
         previewHTML += `<div style="margin-bottom: 20px;">
-          <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">${sections.personalInfo.name || ''}</div>
+          <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">${extractedContent.name}</div>
           <div style="font-size: 12px; color: #666;">`;
         
-        if (sections.personalInfo.email) previewHTML += `<div>${sections.personalInfo.email}</div>`;
-        if (sections.personalInfo.phone) previewHTML += `<div>${sections.personalInfo.phone}</div>`;
-        if (sections.personalInfo.linkedin) previewHTML += `<div>LinkedIn: ${sections.personalInfo.linkedin}</div>`;
-        if (sections.personalInfo.github) previewHTML += `<div>GitHub: ${sections.personalInfo.github}</div>`;
-        if (sections.personalInfo.portfolio) previewHTML += `<div>Portfolio: ${sections.personalInfo.portfolio}</div>`;
+        if (extractedContent.email) previewHTML += `<div>${extractedContent.email}</div>`;
+        if (extractedContent.phone) previewHTML += `<div>${extractedContent.phone}</div>`;
+        if (extractedContent.linkedin) previewHTML += `<div>LinkedIn: ${extractedContent.linkedin}</div>`;
+        if (extractedContent.github) previewHTML += `<div>GitHub: ${extractedContent.github}</div>`;
+        if (extractedContent.portfolio) previewHTML += `<div>Portfolio: ${extractedContent.portfolio}</div>`;
         
         previewHTML += `</div></div>`;
       }
       
       // Add date
-      if (sections.date) {
-        console.log('Preview: Adding date:', sections.date);
-        previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">${sections.date}</div>`;
+      if (extractedContent.date) {
+        previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">${extractedContent.date}</div>`;
       }
       
       // Add hiring manager and company
-      if (sections.hiringManager || sections.company) {
-        console.log('Preview: Adding hiring manager/company:', { hiringManager: sections.hiringManager, company: sections.company });
+      if (extractedContent.hiringManager || extractedContent.company) {
         previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">`;
-        if (sections.hiringManager) previewHTML += `<div>${sections.hiringManager}</div>`;
-        if (sections.company) previewHTML += `<div>${sections.company}</div>`;
+        if (extractedContent.hiringManager) previewHTML += `<div>${extractedContent.hiringManager}</div>`;
+        if (extractedContent.company) previewHTML += `<div>${extractedContent.company}</div>`;
         previewHTML += `</div>`;
       }
       
       // Add subject
-      if (sections.subject) {
-        console.log('Preview: Adding subject:', sections.subject);
-        previewHTML += `<div style="margin-bottom: 20px; font-weight: bold; font-size: 14px;">${sections.subject}</div>`;
+      if (extractedContent.subject) {
+        previewHTML += `<div style="margin-bottom: 20px; font-weight: bold; font-size: 14px;">${extractedContent.subject}</div>`;
       }
       
       // Add greeting
-      if (sections.greeting) {
-        console.log('Preview: Adding greeting:', sections.greeting);
-        previewHTML += `<div style="margin-bottom: 20px;">${sections.greeting}</div>`;
+      if (extractedContent.greeting) {
+        previewHTML += `<div style="margin-bottom: 20px;">${extractedContent.greeting}</div>`;
       }
       
       // Add body
-      if (sections.body) {
-        console.log('Preview: Adding body (first 100 chars):', sections.body.substring(0, 100));
-        previewHTML += `<div style="margin-bottom: 20px; text-align: justify;">${sections.body.replace(/\n/g, '<br>')}</div>`;
+      if (extractedContent.body) {
+        previewHTML += `<div style="margin-bottom: 20px; text-align: justify;">${extractedContent.body.replace(/\n/g, '<br>')}</div>`;
       }
       
       // Add closing
-      if (sections.closing) {
-        console.log('Preview: Adding closing:', sections.closing);
-        previewHTML += `<div style="margin-top: 20px;">${sections.closing}</div>`;
+      if (extractedContent.closing) {
+        previewHTML += `<div style="margin-top: 20px;">${extractedContent.closing.replace(/\n/g, '<br>')}</div>`;
       }
       
       previewHTML += '</div>';
       
       console.log('Preview HTML generated successfully');
-      console.log('Preview HTML (first 500 chars):', previewHTML.substring(0, 500));
       console.log('=== PREVIEW GENERATION END ===');
       return previewHTML;
     } catch (error) {
