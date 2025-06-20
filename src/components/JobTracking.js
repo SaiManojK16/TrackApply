@@ -52,7 +52,10 @@ import {
   ExpandLess as ExpandLessIcon,
   Search as SearchIcon,
   FilterList as FilterListIcon,
-  KeyboardArrowRight as KeyboardArrowRightIcon
+  KeyboardArrowRight as KeyboardArrowRightIcon,
+  Description as DescriptionIcon,
+  Info as InfoIcon,
+  Note as NoteIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -85,7 +88,6 @@ const JobTracking = ({ user }) => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [statusFilter, setStatusFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedRows, setExpandedRows] = useState(new Set());
   
   // Email generation state
   const [emailDialog, setEmailDialog] = useState(false);
@@ -426,16 +428,6 @@ const JobTracking = ({ user }) => {
     });
   };
 
-  const toggleRowExpansion = (applicationId) => {
-    const newExpandedRows = new Set(expandedRows);
-    if (newExpandedRows.has(applicationId)) {
-      newExpandedRows.delete(applicationId);
-    } else {
-      newExpandedRows.add(applicationId);
-    }
-    setExpandedRows(newExpandedRows);
-  };
-
   // Filter applications based on status and search
   const filteredApplications = applications.filter(application => {
     const matchesStatus = statusFilter === 'All' || application.applicationStatus === statusFilter;
@@ -508,11 +500,10 @@ const JobTracking = ({ user }) => {
             />
             
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Filter by Status</InputLabel>
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                label="Filter by Status"
+                displayEmpty
                 sx={{
                   backgroundColor: 'white',
                   borderRadius: 2,
@@ -528,9 +519,12 @@ const JobTracking = ({ user }) => {
                 }}
               >
                 <MenuItem value="All">All Status</MenuItem>
-                {mainFilterStatuses.map(status => (
-                  <MenuItem key={status} value={status}>{status}</MenuItem>
-                ))}
+                <MenuItem value="Applied">Applied</MenuItem>
+                <MenuItem value="Interview Scheduled">Interview Scheduled</MenuItem>
+                <MenuItem value="Interview Completed">Interview Completed</MenuItem>
+                <MenuItem value="Offer Received">Offer Received</MenuItem>
+                <MenuItem value="Rejected">Rejected</MenuItem>
+                <MenuItem value="Withdrawn">Withdrawn</MenuItem>
               </Select>
             </FormControl>
 
@@ -673,234 +667,107 @@ const JobTracking = ({ user }) => {
                   </TableRow>
                 ) : (
                   filteredApplications.map((application, index) => (
-                    <React.Fragment key={application.id}>
-                      <TableRow 
-                        key={`main-row-${application.id}`}
-                        sx={{ 
-                          '&:hover': { 
-                            backgroundColor: '#f8fafc',
-                          },
-                          borderBottom: '1px solid #f1f5f9',
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => toggleRowExpansion(application.id)}
-                      >
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <IconButton size="small" sx={{ p: 0.5 }}>
-                              {expandedRows.has(application.id) ? 
-                                <ExpandLessIcon sx={{ fontSize: 16 }} /> : 
-                                <ExpandMoreIcon sx={{ fontSize: 16 }} />
-                              }
-                            </IconButton>
-                            <Typography variant="body2" sx={{ fontWeight: 500, color: '#1e293b' }}>
-                              {application.companyName}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
-                          <Typography variant="body2" sx={{ color: '#64748b' }}>
-                            {application.jobTitle}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
-                          <Chip
-                            label={application.applicationStatus}
+                    <TableRow 
+                      key={`main-row-${application._id || application.id || index}`}
+                      sx={{ 
+                        '&:hover': { 
+                          backgroundColor: '#f8fafc',
+                        },
+                        borderBottom: '1px solid #f1f5f9'
+                      }}
+                    >
+                      <TableCell sx={{ py: 2, borderBottom: 'none' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: '#1e293b' }}>
+                          {application.companyName}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ py: 2, borderBottom: 'none' }}>
+                        <Typography variant="body2" sx={{ color: '#64748b' }}>
+                          {application.jobTitle}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ py: 2, borderBottom: 'none' }}>
+                        <Chip
+                          label={application.applicationStatus}
+                          size="small"
+                          sx={{
+                            backgroundColor: statusColors[application.applicationStatus]?.bgColor || '#f1f5f9',
+                            color: statusColors[application.applicationStatus]?.textColor || '#64748b',
+                            fontWeight: 500,
+                            fontSize: '0.75rem',
+                            height: 24,
+                            '& .MuiChip-label': {
+                              px: 1.5
+                            }
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ py: 2, borderBottom: 'none' }}>
+                        <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.75rem' }}>
+                          {formatTime(application.updatedAt || application.applicationDate)} {formatDate(application.updatedAt || application.applicationDate)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ py: 2, borderBottom: 'none' }}>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <IconButton 
                             size="small"
-                            sx={{
-                              backgroundColor: statusColors[application.applicationStatus]?.bgColor || '#f1f5f9',
-                              color: statusColors[application.applicationStatus]?.textColor || '#64748b',
-                              fontWeight: 500,
-                              fontSize: '0.75rem',
-                              height: 24,
-                              '& .MuiChip-label': {
-                                px: 1.5
+                            onClick={() => handleView(application)}
+                            sx={{ 
+                              color: '#64748b',
+                              '&:hover': {
+                                backgroundColor: '#f1f5f9',
+                                color: '#3b82f6'
                               }
                             }}
-                          />
-                        </TableCell>
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
-                          <Typography variant="body2" sx={{ color: '#64748b', fontSize: '0.75rem' }}>
-                            {formatTime(application.updatedAt || application.applicationDate)} {formatDate(application.updatedAt || application.applicationDate)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ py: 2, borderBottom: 'none' }}>
-                          <Box sx={{ display: 'flex', gap: 0.5 }}>
-                            <IconButton 
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleView(application);
-                              }}
-                              sx={{ 
-                                color: '#64748b',
-                                '&:hover': {
-                                  backgroundColor: '#f1f5f9',
-                                  color: '#3b82f6'
-                                }
-                              }}
-                            >
-                              <ViewIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                            <IconButton 
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEdit(application);
-                              }}
-                              sx={{ 
-                                color: '#64748b',
-                                '&:hover': {
-                                  backgroundColor: '#f1f5f9',
-                                  color: '#f59e0b'
-                                }
-                              }}
-                            >
-                              <EditIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                            <IconButton 
-                              size="small"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleGenerateEmail(application);
-                              }}
-                              sx={{ 
-                                color: '#64748b',
-                                '&:hover': {
-                                  backgroundColor: '#f1f5f9',
-                                  color: '#10b981'
-                                }
-                              }}
-                            >
-                              <EmailIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                      
-                      {/* Expandable Row Content */}
-                      <TableRow key={`expand-row-${application.id}`}>
-                        <TableCell 
-                          colSpan={5} 
-                          sx={{ 
-                            py: 0, 
-                            borderBottom: expandedRows.has(application.id) ? '1px solid #e2e8f0' : 'none',
-                            backgroundColor: '#fafbfc'
-                          }}
-                        >
-                          <Collapse in={expandedRows.has(application.id)} timeout="auto" unmountOnExit>
-                            <Box sx={{ p: 3 }}>
-                              <Grid container spacing={3}>
-                                <Grid item xs={12} md={6}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#1e293b' }}>
-                                    Job Description
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ color: '#64748b', mb: 2 }}>
-                                    {application.jobDescription || 'No description available'}
-                                  </Typography>
-                                  
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#1e293b' }}>
-                                    Notes
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                    {application.notes || 'No notes added'}
-                                  </Typography>
-                                </Grid>
-                                
-                                <Grid item xs={12} md={6}>
-                                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#1e293b' }}>
-                                    Application Details
-                                  </Typography>
-                                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                    <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                      <strong>Applied:</strong> {formatDate(application.applicationDate)}
-                                    </Typography>
-                                    {application.location && (
-                                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                        <strong>Location:</strong> {application.location}
-                                      </Typography>
-                                    )}
-                                    {application.contactEmail && (
-                                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                        <strong>Contact:</strong> {application.contactEmail}
-                                      </Typography>
-                                    )}
-                                    {application.interviewDate && (
-                                      <Typography variant="body2" sx={{ color: '#64748b' }}>
-                                        <strong>Interview:</strong> {formatDate(application.interviewDate)}
-                                      </Typography>
-                                    )}
-                                  </Box>
-                                  
-                                  <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      startIcon={<EditIcon />}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEdit(application);
-                                      }}
-                                      sx={{
-                                        textTransform: 'none',
-                                        borderColor: '#e2e8f0',
-                                        color: '#64748b',
-                                        '&:hover': {
-                                          borderColor: '#3b82f6',
-                                          color: '#3b82f6'
-                                        }
-                                      }}
-                                    >
-                                      Edit
-                                    </Button>
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      startIcon={<EmailIcon />}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleGenerateEmail(application);
-                                      }}
-                                      sx={{
-                                        textTransform: 'none',
-                                        borderColor: '#e2e8f0',
-                                        color: '#64748b',
-                                        '&:hover': {
-                                          borderColor: '#10b981',
-                                          color: '#10b981'
-                                        }
-                                      }}
-                                    >
-                                      Email
-                                    </Button>
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      startIcon={<DeleteIcon />}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDelete(application._id);
-                                      }}
-                                      sx={{
-                                        textTransform: 'none',
-                                        borderColor: '#e2e8f0',
-                                        color: '#64748b',
-                                        '&:hover': {
-                                          borderColor: '#ef4444',
-                                          color: '#ef4444'
-                                        }
-                                      }}
-                                    >
-                                      Delete
-                                    </Button>
-                                  </Box>
-                                </Grid>
-                              </Grid>
-                            </Box>
-                          </Collapse>
-                        </TableCell>
-                      </TableRow>
-                    </React.Fragment>
+                          >
+                            <ViewIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                          <IconButton 
+                            size="small"
+                            onClick={() => handleEdit(application)}
+                            sx={{ 
+                              color: '#64748b',
+                              '&:hover': {
+                                backgroundColor: '#f1f5f9',
+                                color: '#f59e0b'
+                              }
+                            }}
+                          >
+                            <EditIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                          <IconButton 
+                            size="small"
+                            onClick={() => handleGenerateEmail(application)}
+                            sx={{ 
+                              color: '#64748b',
+                              '&:hover': {
+                                backgroundColor: '#f1f5f9',
+                                color: '#10b981'
+                              }
+                            }}
+                          >
+                            <EmailIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                          <IconButton 
+                            size="small"
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to delete the application for ${application.jobTitle} at ${application.companyName}?`)) {
+                                handleDelete(application._id || application.id);
+                              }
+                            }}
+                            sx={{ 
+                              color: '#64748b',
+                              '&:hover': {
+                                backgroundColor: '#f1f5f9',
+                                color: '#ef4444'
+                              }
+                            }}
+                          >
+                            <DeleteIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
               </TableBody>
@@ -1377,126 +1244,212 @@ const JobTracking = ({ user }) => {
       </Dialog>
 
       {/* View Application Dialog */}
-      <Dialog open={Boolean(viewingApplication)} onClose={() => setViewingApplication(null)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={Boolean(viewingApplication)} 
+        onClose={() => setViewingApplication(null)} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          }
+        }}
+      >
         <DialogTitle sx={{ 
-          pb: 1,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
+          pb: 2,
+          pt: 4,
+          px: 4,
+          borderBottom: '1px solid #f1f5f9',
+          background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
         }}>
-          <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            Application Details
-          </Typography>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: '#1e293b', mb: 1 }}>
+              Application Details
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              View complete information about this job application
+            </Typography>
+          </Box>
           <IconButton
             onClick={() => setViewingApplication(null)}
             sx={{
-              color: 'text.secondary',
+              color: '#64748b',
+              backgroundColor: '#f8fafc',
               '&:hover': {
-                backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                color: 'primary.main'
+                backgroundColor: '#f1f5f9',
+                color: '#ef4444'
               }
             }}
           >
             <CloseIcon />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ pt: 3 }}>
+        <DialogContent sx={{ p: 4, backgroundColor: '#fafbfc' }}>
           {viewingApplication && (
-            <Grid container spacing={3}>
-              <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Job Title
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  {viewingApplication.jobTitle}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Company
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  {viewingApplication.companyName}
-                </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Job Description
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  {viewingApplication.jobDescription || 'No description provided'}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Status
-                </Typography>
-                <Chip
-                  label={viewingApplication.applicationStatus}
-                  color={statusColors[viewingApplication.applicationStatus]?.color || 'default'}
-                  sx={{ mb: 2 }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Applied Date
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  {formatDate(viewingApplication.applicationDate)}
-                </Typography>
-              </Grid>
-              {viewingApplication.location && (
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Location
-                  </Typography>
-                  <Typography variant="body1" sx={{ mb: 2 }}>
-                    {viewingApplication.location}
-                  </Typography>
-                </Grid>
-              )}
-              {viewingApplication.contactEmail && (
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Contact Email
-                  </Typography>
-                  <Typography variant="body1" sx={{ mb: 2 }}>
-                    {viewingApplication.contactEmail}
-                  </Typography>
-                </Grid>
-              )}
-              {viewingApplication.interviewDate && (
-                <Grid item xs={12} sm={6}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Interview Date
-                  </Typography>
-                  <Typography variant="body1" sx={{ mb: 2 }}>
-                    {formatDate(viewingApplication.interviewDate)}
-                  </Typography>
-                </Grid>
-              )}
-              {viewingApplication.notes && (
+            <Box>
+              {/* Header Section */}
+              <Paper sx={{ p: 3, mb: 3, backgroundColor: 'white', borderRadius: 3, border: '1px solid #e2e8f0' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Box sx={{ 
+                    width: 48, 
+                    height: 48, 
+                    borderRadius: 2, 
+                    backgroundColor: '#3b82f6', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center' 
+                  }}>
+                    <WorkIcon sx={{ color: 'white', fontSize: 24 }} />
+                  </Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="h5" sx={{ fontWeight: 700, color: '#1e293b', mb: 0.5 }}>
+                      {viewingApplication.jobTitle}
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#64748b' }}>
+                      {viewingApplication.companyName}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={viewingApplication.applicationStatus}
+                    size="medium"
+                    sx={{
+                      backgroundColor: statusColors[viewingApplication.applicationStatus]?.bgColor || '#f1f5f9',
+                      color: statusColors[viewingApplication.applicationStatus]?.textColor || '#64748b',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      height: 32,
+                      '& .MuiChip-label': {
+                        px: 2
+                      }
+                    }}
+                  />
+                </Box>
+              </Paper>
+
+              {/* Details Grid */}
+              <Grid container spacing={3}>
+                {/* Job Description */}
                 <Grid item xs={12}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Notes
-                  </Typography>
-                  <Typography variant="body1" sx={{ mb: 2 }}>
-                    {viewingApplication.notes}
-                  </Typography>
+                  <Paper sx={{ p: 3, backgroundColor: 'white', borderRadius: 3, border: '1px solid #e2e8f0' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <DescriptionIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                        Job Description
+                      </Typography>
+                    </Box>
+                    <Typography variant="body1" sx={{ 
+                      color: '#64748b', 
+                      lineHeight: 1.6,
+                      backgroundColor: '#f8fafc',
+                      p: 2,
+                      borderRadius: 2,
+                      border: '1px solid #e2e8f0'
+                    }}>
+                      {viewingApplication.jobDescription || 'No description provided'}
+                    </Typography>
+                  </Paper>
                 </Grid>
-              )}
-            </Grid>
+
+                {/* Application Details */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 3, backgroundColor: 'white', borderRadius: 3, border: '1px solid #e2e8f0', height: '100%' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <InfoIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                        Application Details
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#64748b', mb: 0.5 }}>
+                          Applied Date
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: '#1e293b', fontWeight: 500 }}>
+                          {formatDate(viewingApplication.applicationDate)}
+                        </Typography>
+                      </Box>
+                      
+                      {viewingApplication.location && (
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#64748b', mb: 0.5 }}>
+                            Location
+                          </Typography>
+                          <Typography variant="body1" sx={{ color: '#1e293b', fontWeight: 500 }}>
+                            {viewingApplication.location}
+                          </Typography>
+                        </Box>
+                      )}
+                      
+                      {viewingApplication.contactEmail && (
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#64748b', mb: 0.5 }}>
+                            Contact Email
+                          </Typography>
+                          <Typography variant="body1" sx={{ color: '#1e293b', fontWeight: 500 }}>
+                            {viewingApplication.contactEmail}
+                          </Typography>
+                        </Box>
+                      )}
+                      
+                      {viewingApplication.interviewDate && (
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#64748b', mb: 0.5 }}>
+                            Interview Date
+                          </Typography>
+                          <Typography variant="body1" sx={{ color: '#1e293b', fontWeight: 500 }}>
+                            {formatDate(viewingApplication.interviewDate)}
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Paper>
+                </Grid>
+
+                {/* Notes */}
+                <Grid item xs={12} md={6}>
+                  <Paper sx={{ p: 3, backgroundColor: 'white', borderRadius: 3, border: '1px solid #e2e8f0', height: '100%' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <NoteIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#1e293b' }}>
+                        Notes
+                      </Typography>
+                    </Box>
+                    <Typography variant="body1" sx={{ 
+                      color: '#64748b', 
+                      lineHeight: 1.6,
+                      backgroundColor: '#f8fafc',
+                      p: 2,
+                      borderRadius: 2,
+                      border: '1px solid #e2e8f0',
+                      minHeight: 120
+                    }}>
+                      {viewingApplication.notes || 'No notes added'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+            </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 2 }}>
+        <DialogActions sx={{ p: 4, pt: 2, borderTop: '1px solid #f1f5f9', backgroundColor: '#fafbfc' }}>
           <Button 
+            variant="outlined"
             onClick={() => setViewingApplication(null)}
             sx={{
               textTransform: 'none',
-              borderRadius: '8px',
-              px: 3
+              borderRadius: 2,
+              px: 3,
+              py: 1,
+              borderColor: '#e2e8f0',
+              color: '#64748b',
+              '&:hover': {
+                borderColor: '#cbd5e1',
+                backgroundColor: '#f8fafc'
+              }
             }}
           >
             Close

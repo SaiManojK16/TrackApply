@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Container,
   Typography,
@@ -17,6 +17,9 @@ import {
   CardContent,
   Divider,
   Chip,
+  Menu,
+  MenuItem,
+  Snackbar,
 } from '@mui/material';
 import { 
   Description as DescriptionIcon,
@@ -28,11 +31,17 @@ import {
   Code as CodeIcon,
   PictureAsPdf as PdfIcon,
   Work as WorkIcon,
-  Business as BusinessIcon
+  Business as BusinessIcon,
+  MoreVert as MoreVertIcon
 } from '@mui/icons-material';
-import { Snackbar, Alert as MuiAlert } from '@mui/material';
+import { Snackbar as MuiSnackbar, Alert as MuiAlert } from '@mui/material';
 import axios from 'axios';
-import jsPDF from 'jspdf';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import { Document, Page, pdfjs } from 'react-pdf';
+import { LetterTemplate } from './LetterTemplate';
+
+// Set up PDF.js worker - disable worker for now to avoid CDN issues
+pdfjs.GlobalWorkerOptions.workerSrc = '';
 
 interface FormData {
   companyName: string;
@@ -68,13 +77,19 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
     resumeText: '',
     userInstructions: '',
   });
-  const [loading, setLoading] = useState(false);
-  const [coverLetter, setCoverLetter] = useState('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [coverLetter, setCoverLetter] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState('');
-  const [error, setError] = useState('');
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [showLatex, setShowLatex] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'warning' | 'info' });
+  const [error, setError] = useState<string>('');
+  const [pdfLoading, setPdfLoading] = useState<boolean>(false);
+  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
+  const [pdfError, setPdfError] = useState<string>('');
+  const [showLatex, setShowLatex] = useState<boolean>(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' | 'warning' | 'info' }>({ 
+    open: false, 
+    message: '', 
+    severity: 'success' 
+  });
 
   const theme = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -91,28 +106,6 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Check generation limit for users without unlimited access
-    if (user && !user.hasUnlimitedAccess) {
-      const generationCount = user.generationCount || 0;
-      if (generationCount >= 3) {
-        setError('You have reached the free generation limit (3/3). Please enter your access key in the Profile section to continue generating cover letters.');
-        return;
-      }
-    }
-
-    // Validate required fields
-    if (!formData.jobTitle || !formData.companyName || !formData.jobDescription) {
-      setError('Please fill in all required job information fields.');
-      return;
-    }
-
-    // Check if user has resume data or provided resume
-    if (!user?.resumeData && !formData.resumeFile && !formData.resumeText) {
-      setError('Please upload a resume or paste resume text, or complete your profile with resume information.');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
@@ -134,6 +127,22 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
       if (response.data.coverLetterLatex) {
         setCoverLetter(response.data.coverLetterLatex);
         
+        // Automatically generate PDF preview
+        try {
+          const pdfResponse = await axios.post('https://latex-pdf-api-production.up.railway.app/compile', {
+            latex: response.data.coverLetterLatex,
+            filename: 'cover-letter'
+          }, {
+            responseType: 'blob'
+          });
+          
+          const blob = new Blob([pdfResponse.data], { type: 'application/pdf' });
+          setPdfBlob(blob);
+        } catch (error) {
+          console.error('PDF preview generation failed:', error);
+          // Don't show error for preview generation
+        }
+        
         // Increment generation count for users without unlimited access
         if (user && !user.hasUnlimitedAccess) {
           const updatedUser = { 
@@ -144,25 +153,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
           if (onUserUpdate) onUserUpdate(updatedUser);
         }
         
-        // Generate PDF preview
-        try {
-          setPdfLoading(true);
-          
-          // Generate PDF from LaTeX content
-          const pdfUrl = generatePDFFromLatex(response.data.coverLetterLatex);
-          
-          if (pdfUrl) {
-            setPreviewUrl(pdfUrl);
-            console.log('PDF preview generated successfully');
-          } else {
-            throw new Error('Failed to generate PDF preview');
-          }
-        } catch (pdfError) {
-          console.error('PDF generation failed:', pdfError);
-          setError('Failed to generate PDF preview');
-        } finally {
-          setPdfLoading(false);
-        }
+        setSnackbar({ open: true, message: 'Cover letter generated successfully!', severity: 'success' });
       } else {
         setError(response.data.error || 'Failed to generate cover letter');
       }
@@ -177,66 +168,41 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
   const handleDownload = async () => {
     if (coverLetter) {
       try {
-        // Generate PDF from LaTeX content
-        const pdf = new jsPDF();
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const margin = 20;
-        const maxWidth = pageWidth - (2 * margin);
+        setPdfLoading(true);
         
-        // Extract text content from LaTeX
-        let text = coverLetter
-          .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
-          .replace(/\\end\{document\}/g, '')
-          .replace(/\\usepackage[^}]*/g, '')
-          .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-          .replace(/\\[a-zA-Z]+/g, '')
-          .replace(/[{}]/g, '')
-          .replace(/\\\\(?!\\)/g, '\n')
-          .replace(/\\\\/g, '\n')
-          .replace(/\\vspace\{[^}]*\}/g, '\n\n')
-          .replace(/\\textbf\{([^}]*)\}/g, '$1')
-          .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
-          .replace(/\\href\{([^}]*)\}/g, '$1')
-          .replace(/\s+/g, ' ')
-          .replace(/\n\s*\n/g, '\n\n')
-          .trim();
+        // Send LaTeX to Railway PDF API
+        const response = await axios.post('https://latex-pdf-api-production.up.railway.app/compile', {
+          latex: coverLetter,
+          filename: `cover-letter-${formData.companyName || 'document'}`
+        }, {
+          responseType: 'blob' // Important: get the PDF as a blob
+        });
         
-        // Set font
-        pdf.setFont('helvetica');
-        pdf.setFontSize(12);
-        
-        // Split text into lines
-        const lines = pdf.splitTextToSize(text, maxWidth);
-        
-        let yPosition = 30;
-        const lineHeight = 7;
-        
-        // Add content to PDF
-        for (let i = 0; i < lines.length; i++) {
-          if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-          pdf.text(lines[i], margin, yPosition);
-          yPosition += lineHeight;
-        }
-        
-        // Download the PDF
-        const filename = `cover-letter-${formData.companyName || 'document'}.pdf`;
-        pdf.save(filename);
+        // Create download link
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `cover-letter-${formData.companyName || 'document'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
         
         setSnackbar({
           open: true,
           message: 'Cover letter downloaded successfully!',
           severity: 'success'
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error('Download failed:', error);
         setSnackbar({
           open: true,
           message: 'Failed to download cover letter',
           severity: 'error'
         });
+      } finally {
+        setPdfLoading(false);
       }
     }
   };
@@ -256,62 +222,49 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
     setShowLatex(false);
   };
 
-  // Function to convert LaTeX content to PDF
-  const generatePDFFromLatex = (latexContent: string): string | null => {
-    try {
-      // Extract text content from LaTeX
-      let text = latexContent
-        .replace(/\\documentclass[\s\S]*?\\begin\{document\}/g, '')
-        .replace(/\\end\{document\}/g, '')
-        .replace(/\\usepackage[^}]*/g, '')
-        .replace(/\\[a-zA-Z]+\{[^}]*\}/g, '')
-        .replace(/\\[a-zA-Z]+/g, '')
-        .replace(/[{}]/g, '')
-        .replace(/\\\\(?!\\)/g, '\n')
-        .replace(/\\\\/g, '\n')
-        .replace(/\\vspace\{[^}]*\}/g, '\n\n')
-        .replace(/\\textbf\{([^}]*)\}/g, '$1')
-        .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
-        .replace(/\\href\{([^}]*)\}/g, '$1')
-        .replace(/\s+/g, ' ')
-        .replace(/\n\s*\n/g, '\n\n')
-        .trim();
-
-      // Create PDF
-      const pdf = new jsPDF();
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const margin = 20;
-      const maxWidth = pageWidth - (2 * margin);
-      
-      // Set font
-      pdf.setFont('helvetica');
-      pdf.setFontSize(12);
-      
-      // Split text into lines
-      const lines = pdf.splitTextToSize(text, maxWidth);
-      
-      let yPosition = 30;
-      const lineHeight = 7;
-      
-      // Add content to PDF
-      for (let i = 0; i < lines.length; i++) {
-        if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
-          pdf.addPage();
-          yPosition = 20;
-        }
-        pdf.text(lines[i], margin, yPosition);
-        yPosition += lineHeight;
-      }
-      
-      // Generate PDF blob
-      const pdfBlob = pdf.output('blob');
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-      
-      return pdfUrl;
-    } catch (error) {
-      console.error('Error generating PDF from LaTeX:', error);
-      return null;
-    }
+  // Function to create a simple HTML preview from LaTeX (for display only)
+  const createSimplePreview = (latexContent: string) => {
+    if (!latexContent) return '';
+    
+    // Extract content from LaTeX template
+    let text = latexContent;
+    
+    // Remove LaTeX document structure and packages
+    text = text.replace(/\\documentclass[^}]*}/g, '');
+    text = text.replace(/\\usepackage[^}]*}/g, '');
+    text = text.replace(/\\begin\{document\}/g, '');
+    text = text.replace(/\\end\{document\}/g, '');
+    
+    // Replace LaTeX placeholders with actual content
+    text = text.replace(/\\textbf\{([^}]*)\}/g, '<strong>$1</strong>');
+    text = text.replace(/\\href\{([^}]*)\}\{([^}]*)\}/g, '<a href="$1" target="_blank" style="color: #3b82f6; text-decoration: underline;">$2</a>');
+    text = text.replace(/\\href\{([^}]*)\}/g, '<a href="$1" target="_blank" style="color: #3b82f6; text-decoration: underline;">$1</a>');
+    
+    // Handle line breaks and spacing
+    text = text.replace(/\\vspace\{[^}]*\}/g, '<br><br>');
+    text = text.replace(/\\\\/g, '<br>');
+    text = text.replace(/\\\\(?!\\)/g, '<br>');
+    
+    // Remove other LaTeX commands
+    text = text.replace(/\\[a-zA-Z]+\{[^}]*\}/g, '');
+    text = text.replace(/\\[a-zA-Z]+/g, '');
+    
+    // Clean up braces and extra spaces
+    text = text.replace(/[{}]/g, '');
+    text = text.replace(/\s+/g, ' ');
+    text = text.replace(/<br>\s*<br>/g, '<br><br>');
+    text = text.trim();
+    
+    // Split into lines and format
+    const lines = text.split('\n');
+    const formattedLines = lines.map(line => {
+      const trimmedLine = line.trim();
+      if (trimmedLine === '') return '<br>';
+      if (trimmedLine.startsWith('%')) return ''; // Remove LaTeX comments
+      return `<div style="margin-bottom: 8px;">${trimmedLine}</div>`;
+    });
+    
+    return formattedLines.join('');
   };
 
   return (
@@ -710,24 +663,54 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
                               Generating PDF preview...
                             </Typography>
                           </Box>
-                        ) : previewUrl ? (
-                          <iframe
-                            src={previewUrl}
-                            style={{
-                              width: '100%',
-                              height: '600px',
-                              border: 'none',
-                              borderRadius: '8px'
-                            }}
-                            title="Cover Letter PDF Preview"
-                          />
-                        ) : (
-                          <Box sx={{ p: 4, textAlign: 'center' }}>
-                            <PdfIcon sx={{ fontSize: 48, color: '#9ca3af', mb: 2 }} />
-                            <Typography variant="body2" color="text.secondary">
-                              PDF preview will appear here
-                            </Typography>
+                        ) : pdfBlob ? (
+                          <Box sx={{
+                            p: 2,
+                            minHeight: '400px',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                          }}>
+                            <Document
+                              file={pdfBlob}
+                              onLoadError={(error) => {
+                                console.error('PDF load error:', error);
+                                setPdfError('Failed to load PDF preview. Showing text preview instead.');
+                                setPdfBlob(null); // Fallback to text preview
+                              }}
+                              onLoadSuccess={() => {
+                                setPdfError(''); // Clear any previous errors
+                              }}
+                              loading={
+                                <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                                  <CircularProgress />
+                                </Box>
+                              }
+                            >
+                              <Page
+                                pageNumber={1}
+                                width={400}
+                                renderTextLayer={false}
+                                renderAnnotationLayer={false}
+                              />
+                            </Document>
                           </Box>
+                        ) : (
+                          <Box sx={{
+                            p: 3,
+                            minHeight: '400px',
+                            fontFamily: 'Times New Roman, serif',
+                            fontSize: '14px',
+                            lineHeight: 1.6
+                          }}
+                          dangerouslySetInnerHTML={{ __html: createSimplePreview(coverLetter) }}
+                          />
+                        )}
+                        
+                        {pdfError && (
+                          <Alert severity="error" sx={{ mt: 2 }}>
+                            {pdfError}
+                          </Alert>
                         )}
                       </Box>
                     )}
@@ -754,7 +737,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
           </Grid>
         </Grid>
       </Container>
-      <Snackbar
+      <MuiSnackbar
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
@@ -762,7 +745,7 @@ const CoverLetterGenerator: React.FC<CoverLetterGeneratorProps> = ({ user, onUse
         <MuiAlert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
           {snackbar.message}
         </MuiAlert>
-      </Snackbar>
+      </MuiSnackbar>
     </Box>
   );
 };

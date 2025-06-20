@@ -33,21 +33,31 @@ function escapeLatex(str: string): string {
  */
 function escapeLatexBody(str: string): string {
     if (!str) return '';
-    str = str.replace(/\\\\/g, '<<BACKSLASH>>');
+    
+    // First, protect LaTeX commands
+    str = str.replace(/\\\\/g, '<<DOUBLEBACKSLASH>>');
     str = str.replace(/\\begin\{itemize\}/g, '<<BEGINITEMIZE>>');
     str = str.replace(/\\end\{itemize\}/g, '<<ENDITEMIZE>>');
     str = str.replace(/\\item/g, '<<ITEM>>');
+    str = str.replace(/\\vspace\{([^}]+)\}/g, '<<VSPACE:$1>>');
+    str = str.replace(/\\textbf\{([^}]+)\}/g, '<<BOLD:$1>>');
+    
+    // Escape special LaTeX characters
     str = str.replace(/([%$#_{}~^&])/g, '\\$1');
-    str = str.replace(/<<BACKSLASH>>/g, '\\\\');
+    
+    // Restore LaTeX commands
+    str = str.replace(/<<DOUBLEBACKSLASH>>/g, '\\\\');
     str = str.replace(/<<BEGINITEMIZE>>/g, '\\begin{itemize}');
     str = str.replace(/<<ENDITEMIZE>>/g, '\\end{itemize}');
     str = str.replace(/<<ITEM>>/g, '\\item');
+    str = str.replace(/<<VSPACE:([^>]+)>>/g, '\\vspace{$1}');
+    str = str.replace(/<<BOLD:([^>]+)>>/g, '\\textbf{$1}');
+    
     return str;
 }
 
 // Define the base LaTeX template for the cover letter
-const latexTemplate = `
-% Cover Letter Template
+const latexTemplate = `% Cover Letter Template
 \\documentclass[11pt,a4paper]{article}
 \\usepackage[margin=1in]{geometry}
 \\usepackage{hyperref}
@@ -58,33 +68,33 @@ const latexTemplate = `
 \\begin{document}
 
 % Personal Information
-\\textbf{{{Name}}} \\\\
-{{Email}} \\\\
-{{Phone}} \\\\
-LinkedIn: \\href{{{LinkedIn}}}{{{LinkedIn}}} \\\\
-GitHub: \\href{{{GitHub}}}{{{GitHub}}} \\\\
-Portfolio: \\href{{{Portfolio}}}{{{Portfolio}}}
+\\noindent \\textbf{{{Name}}} \\\\
+\\noindent {{Email}} \\\\
+\\noindent {{Phone}} \\\\
+\\noindent LinkedIn: \\href{{{LinkedIn}}}{LinkedIn} \\\\
+\\noindent GitHub: \\href{{{GitHub}}}{GitHub} \\\\
+\\noindent Portfolio: \\href{{{Portfolio}}}{Portfolio}
 
 \\vspace{0.5in}
 
 % Date
-{{Date}}
+\\noindent {{Date}}
 
 \\vspace{0.3in}
 
 % Hiring Manager
-{{HiringManager}} \\\\
-{{Company}}
+\\noindent {{HiringManager}} \\\\
+\\noindent {{Company}}
 
 \\vspace{0.3in}
 
 % Subject
-\\textbf{Application for {{Position}} Position at {{Company}}}
+\\noindent \\textbf{Subject: Application for {{Position}} Position at {{Company}}}
 
 \\vspace{0.3in}
 
 % Greeting
-Dear {{HiringManager}},
+\\noindent Dear {{HiringManager}},
 
 \\vspace{0.2in}
 
@@ -94,8 +104,8 @@ Dear {{HiringManager}},
 \\vspace{0.3in}
 
 % Closing
-Sincerely, \\\\
-{{Name}}
+\\noindent Sincerely, \\\\
+\\noindent {{Name}}
 
 \\end{document}`;
 
@@ -174,6 +184,11 @@ export async function POST(request: NextRequest) {
     const finalGithub = github || user?.github || '';
     const finalPortfolio = portfolio || user?.portfolio || '';
 
+    // Ensure portfolio has proper URL format
+    const formattedPortfolio = finalPortfolio && !finalPortfolio.startsWith('http') 
+      ? `https://${finalPortfolio}` 
+      : finalPortfolio;
+
     // Get current date
     const currentDate = new Date().toLocaleDateString('en-US', { 
       year: 'numeric', 
@@ -199,45 +214,97 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Construct the prompt for the Gemini AI model
-    const prompt = `You are a cover letter generator. Based on the provided information, generate a JSON response with exactly this field:
+    // Construct the standardized prompt for the Gemini AI model
+    const prompt = `You are generating a job-specific cover letter-style CV with the following strict rules:
 
+---
+
+📄 STRUCTURE
+
+1. Header Section:
+   - Full Name (bold, 18px)
+   - Contact Info: Email, Phone, LinkedIn, GitHub, Portfolio (regular, 12px)
+   - Date (auto-generated, long format like "June 15, 2025")
+
+2. Company Info Section:
+   - Hiring Company Name
+   - Position Title
+   - Company Address (if provided)
+
+3. Greeting:
+   - Fixed as: "Dear Hiring Manager,"
+
+4. Body (Content Paragraphs):
+   - 2 to 3 paragraphs ONLY
+   - Each paragraph must be 80–100 words
+   - Write in first person and professional tone
+   - Tailor content using the uploaded resume and job description
+   - Must demonstrate alignment between user's experience and the job requirements
+
+5. Closing Section:
+   - Fixed closing line: "Sincerely,"
+   - Signature: Applicant's Full Name
+
+---
+
+✒️ CONTENT RULES
+
+- Do not exceed 3 paragraphs
+- No custom headers (e.g., no "Experience", "Skills" titles)
+- Use bullet points only with simple • format (if applicable, max 3 bullets in total)
+- No greetings other than "Dear Hiring Manager,"
+- Do not include personal pronouns in the header or contact section
+
+---
+
+🎨 STYLING RULES
+
+- Font: Times New Roman in HTML preview, Helvetica for PDF rendering
+- Font Sizes: 18px for Name, 12px for all other text
+- Layout: Single-column, fully left-aligned
+- Colors: Only black or dark gray text (no custom color styling)
+- No images, logos, or icons
+- No tables, columns, or visual elements — plain text only
+
+---
+
+✍️ OUTPUT FORMAT
+
+Return ONLY a JSON object with this exact structure:
 {
-  "BodyParagraphs": "Write 2-3 paragraphs for the cover letter body ONLY. Each paragraph should be 80-100 words maximum. The content should be highly customized based on the user's additional instructions, the JOB ROLE, and the RESUME CONTENT. Include: 1) Introduction and strong interest in the position, 2) Specific relevant experience and projects *directly from the RESUME CONTENT* that align with the JOB ROLE, 3) Why you are interested in *this specific company* and a compelling closing. Use the user's instructions to guide the tone, style, and specific content."
+  "bodyParagraphs": "Write 2-3 paragraphs here, each 80-100 words, separated by \\n\\n. Use bullet points with • if needed. Focus on aligning the candidate's experience with the job requirements."
 }
 
 CRITICAL RULES:
-- Respond ONLY with valid JSON in the exact format shown above
-- DO NOT use markdown formatting, code blocks, or any other formatting
-- Return ONLY the raw JSON object, nothing else
-- User instructions ONLY apply to the body paragraphs of the cover letter
-- Do NOT modify the header, contact information, company details, subject line, date, or signature
-- **ABSOLUTELY CRITICAL:** If user instructions are provided, they are MANDATORY and take precedence for shaping the body content. Follow them precisely regarding paragraph count, bullet points, highlighting specific skills, or any other formatting/content directives within the 80-100 word limit per paragraph.
-- If no user instructions are provided, use the default professional format for the body, but still integrate resume and job details.
-- Each paragraph in the body should be 80-100 words maximum. If content exceeds this limit, split it into multiple paragraphs.
-- Format the BodyParagraphs with proper LaTeX line breaks (\\\\\\\\) between paragraphs. If bullet points are requested in user instructions, format them using standard LaTeX itemize environment (e.g., \\\\begin{itemize}\\\\item Item 1\\\\item Item 2\\\\end{itemize}).
-- **IMPORTANT:** Integrate specific keywords, skills, and experiences *directly from the provided RESUME CONTENT* that are relevant to the JOB ROLE.
-- **IMPORTANT:** Avoid generic statements; ensure the letter highlights *how your resume directly addresses the job description*.
-- **IMPORTANT:** DO NOT include any placeholders (e.g., [Platform where you saw the advertisement], [Specific company interest]). If information is not provided, either omit it or make a general, professional statement (e.g., "as advertised online," "your esteemed institution").
+- Return ONLY valid JSON in the exact format shown above
+- Do not use markdown, code blocks, or any other formatting
+- Ensure all quotes in the text are properly escaped for JSON
+- Use \\n\\n for paragraph breaks
+- Use • for bullet points
+- Each paragraph should be 80-100 words maximum
 
-User Instructions (MANDATORY for body content only):
-${userInstructions || 'No specific instructions provided - use default professional format for body'}
+---
 
-JOB ROLE:
-Title: ${jobTitle}
-Description: ${jobDescription}
-Company: ${companyName}
-
-PERSONAL DETAILS:
+USER INFORMATION:
 Name: ${finalFullName}
 Email: ${finalEmail}
 Phone: ${finalPhone}
 LinkedIn: ${finalLinkedin}
 GitHub: ${finalGithub}
-Portfolio: ${finalPortfolio}
+Portfolio: ${formattedPortfolio}
+
+JOB INFORMATION:
+Company: ${companyName}
+Position: ${jobTitle}
+Description: ${jobDescription}
 
 RESUME CONTENT:
-${resumeContent}`;
+${resumeContent}
+
+USER INSTRUCTIONS:
+${userInstructions || 'No specific instructions provided - use default professional format'}
+
+Generate the body paragraphs that align the candidate's experience with this specific job opportunity.`;
 
     // Generate content using the Gemini AI model
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -246,50 +313,95 @@ ${resumeContent}`;
     
     const rawText = result.response.text();
     console.log('Raw AI response:', rawText);
-    // Attempt to parse the AI's response as JSON
+    
+    // Improved JSON parsing with better error handling
     try {
       // Remove all code block markers and trim whitespace
       let jsonText = rawText.replace(/```json|```/g, '').trim();
-      aiContent = JSON.parse(jsonText);
+      
+      // First, try to parse the JSON as-is
+      try {
+        aiContent = JSON.parse(jsonText);
+      } catch (initialError) {
+        console.log('Initial JSON parse failed, attempting to fix escaping...');
+        
+        // Fix common JSON escaping issues
+        jsonText = jsonText
+          .replace(/\\/g, '\\\\') // Escape backslashes first
+          .replace(/"/g, '\\"') // Escape quotes
+          .replace(/\\\\n/g, '\\n') // Fix newline escaping
+          .replace(/\\\\t/g, '\\t'); // Fix tab escaping
+        
+        // Try parsing again
+        try {
+          aiContent = JSON.parse(jsonText);
+        } catch (secondError) {
+          console.log('Second parse attempt failed, trying manual extraction...');
+          
+          // Manual extraction as last resort
+          const bodyMatch = jsonText.match(/"bodyParagraphs"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
+          if (bodyMatch) {
+            aiContent = {
+              bodyParagraphs: bodyMatch[1]
+                .replace(/\\n/g, '\n')
+                .replace(/\\t/g, '\t')
+                .replace(/\\"/g, '"')
+                .replace(/\\\\/g, '\\')
+            };
+          } else {
+            throw new Error('Could not extract bodyParagraphs from AI response');
+          }
+        }
+      }
     } catch (e) {
       console.error('JSON parse error:', e);
       // If parsing fails, try to extract JSON from the response text
       let jsonText = rawText.replace(/```json|```/g, '').trim();
+      
       // Try to find JSON object in the cleaned text
       const match = jsonText.match(/\{[\s\S]*\}/);
       if (match) {
         try {
-          aiContent = JSON.parse(match[0]);
+          // Clean up the matched JSON
+          let cleanJson = match[0]
+            .replace(/\\/g, '\\\\')
+            .replace(/"/g, '\\"')
+            .replace(/\\\\n/g, '\\n')
+            .replace(/\\\\t/g, '\\t');
+          
+          aiContent = JSON.parse(cleanJson);
         } catch (parseError) {
           console.error('Failed to parse extracted JSON:', parseError);
           console.error('Full AI response:', rawText);
           // Fallback to default cover letter body
           aiContent = {
-            BodyParagraphs: "I am reaching out to express interest in the position at your company. With a foundation in software engineering and product-focused thinking, I aim to contribute both technical depth and collaborative energy to your organization.\\\\\\\\\\n\\nIn my recent projects, I have worked on relevant projects and technical skills and actively participated in areas such as teamwork, problem-solving, and technical expertise. I am particularly impressed by the company's innovative approach and growth opportunities, and I'm eager to be part of its growth.\\\\\\\\\\n\\nPlease find my resume attached. I would be glad to discuss further how I can support your company's goals."
+            bodyParagraphs: "I am reaching out to express interest in the position at your company. With a foundation in software engineering and product-focused thinking, I aim to contribute both technical depth and collaborative energy to your organization.\n\nIn my recent projects, I have worked on relevant projects and technical skills and actively participated in areas such as teamwork, problem-solving, and technical expertise. I am particularly impressed by the company's innovative approach and growth opportunities, and I'm eager to be part of its growth.\n\nPlease find my resume attached. I would be glad to discuss further how I can support your company's goals."
           };
         }
       } else {
         console.error('No JSON found in AI response');
         console.error('Full AI response:', rawText);
         aiContent = {
-          BodyParagraphs: "I am reaching out to express interest in the position at your company. With a foundation in software engineering and product-focused thinking, I aim to contribute both technical depth and collaborative energy to your organization.\\\\\\\\\\n\\nIn my recent projects, I have worked on relevant projects and technical skills and actively participated in areas such as teamwork, problem-solving, and technical expertise. I am particularly impressed by the company's innovative approach and growth opportunities, and I'm eager to be part of its growth.\\\\\\\\\\n\\nPlease find my resume attached. I would be glad to discuss further how I can support your company's goals."
+          bodyParagraphs: "I am reaching out to express interest in the position at your company. With a foundation in software engineering and product-focused thinking, I aim to contribute both technical depth and collaborative energy to your organization.\n\nIn my recent projects, I have worked on relevant projects and technical skills and actively participated in areas such as teamwork, problem-solving, and technical expertise. I am particularly impressed by the company's innovative approach and growth opportunities, and I'm eager to be part of its growth.\n\nPlease find my resume attached. I would be glad to discuss further how I can support your company's goals."
         };
       }
     }
 
-    // Fill the LaTeX template with dynamic content
+    // Build the LaTeX code using the template and AI-generated body
     const filledLatex = latexTemplate
-      .replace(/{{Name}}/g, escapeLatex(finalFullName))
-      .replace(/{{Email}}/g, escapeLatex(finalEmail))
-      .replace(/{{Phone}}/g, finalPhone ? escapeLatex(finalPhone) : '')
-      .replace(/{{LinkedIn}}/g, finalLinkedin ? escapeLatex(finalLinkedin) : '')
-      .replace(/{{GitHub}}/g, finalGithub ? escapeLatex(finalGithub) : '')
-      .replace(/{{Portfolio}}/g, finalPortfolio ? escapeLatex(finalPortfolio) : '')
-      .replace(/{{Date}}/g, escapeLatex(currentDate))
-      .replace(/{{HiringManager}}/g, escapeLatex('Hiring Manager'))
-      .replace(/{{Company}}/g, escapeLatex(companyName))
-      .replace(/{{Position}}/g, escapeLatex(jobTitle))
-      .replace(/{{BodyParagraphs}}/g, escapeLatexBody(aiContent.BodyParagraphs) || "");
+      .replace(/\{\{Name\}\}/g, escapeLatex(finalFullName))
+      .replace(/\{\{Email\}\}/g, finalEmail ? escapeLatex(finalEmail) + ' \\\\' : '')
+      .replace(/\{\{Phone\}\}/g, finalPhone ? escapeLatex(finalPhone) + ' \\\\' : '')
+      .replace(/\{\{LinkedIn\}\}/g, escapeLatex(finalLinkedin))
+      .replace(/\{\{GitHub\}\}/g, escapeLatex(finalGithub))
+      .replace(/\{\{Portfolio\}\}/g, escapeLatex(formattedPortfolio))
+      .replace(/\{\{Date\}\}/g, currentDate)
+      .replace(/\{\{HiringManager\}\}/g, 'Hiring Manager')
+      .replace(/\{\{Company\}\}/g, escapeLatex(companyName))
+      .replace(/\{\{Position\}\}/g, escapeLatex(jobTitle))
+      .replace(/\{\{BodyParagraphs\}\}/g, escapeLatexBody(aiContent.bodyParagraphs))
+      .replace(/\\\\\s*\\\\/g, '\\\\') // Clean up double line breaks
+      .replace(/\n\s*\n\s*\n/g, '\n\n'); // Clean up multiple empty lines
 
     return NextResponse.json({ coverLetterLatex: filledLatex });
   } catch (error) {

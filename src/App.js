@@ -95,10 +95,10 @@ function App() {
     
     if (savedToken && savedUser) {
       setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+      const userData = JSON.parse(savedUser);
+      setUser(userData);
       
       // Pre-fill form with user data
-      const userData = JSON.parse(savedUser);
       setFormData(prev => ({
         ...prev,
         fullName: userData.fullName || '',
@@ -117,16 +117,24 @@ function App() {
     }
   }, [isHydrated]);
 
-  // Set up axios interceptor to include auth token
+  // Set up axios interceptor once on component mount
   useEffect(() => {
-    if (token) {
-      console.log('Setting axios authorization header with token:', token.substring(0, 20) + '...');
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    } else {
-      console.log('Removing axios authorization header');
-      delete axios.defaults.headers.common['Authorization'];
-    }
-  }, [token]);
+    const interceptor = axios.interceptors.request.use(
+      (config) => {
+        const token = localStorage.getItem('token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    // Cleanup function to remove interceptor
+    return () => {
+      axios.interceptors.request.eject(interceptor);
+    };
+  }, []); // Empty dependency array - only run once
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

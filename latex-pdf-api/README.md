@@ -1,15 +1,44 @@
-# LaTeX PDF API
+# LaTeX PDF API Server
 
-A Node.js Express server that compiles LaTeX to PDF using `pdflatex`. This service can be deployed to Render, Railway, or any VPS that supports Node.js and has TeX Live installed.
+A Node.js server that compiles LaTeX documents to PDF using pdflatex.
 
 ## Features
 
-- Compiles LaTeX code to PDF
-- Supports both JSON and form data requests
-- Automatic cleanup of temporary files
+- LaTeX to PDF compilation
 - CORS enabled for cross-origin requests
 - Health check endpoint
-- Error handling and logging
+- File cleanup after compilation
+- Support for both JSON and form data
+
+## Endpoints
+
+- `GET /health` - Health check
+- `POST /compile` - Compile LaTeX to PDF (JSON)
+- `POST /compile-form` - Compile LaTeX to PDF (Form data)
+
+## Usage
+
+### JSON Request
+```bash
+curl -X POST https://your-railway-url.railway.app/compile \
+  -H "Content-Type: application/json" \
+  -d '{"latex": "\\documentclass{article}\\begin{document}Hello World\\end{document}", "filename": "test"}'
+```
+
+### Form Data Request
+```bash
+curl -X POST https://your-railway-url.railway.app/compile-form \
+  -F "latex=\\documentclass{article}\\begin{document}Hello World\\end{document}" \
+  -F "filename=test"
+```
+
+## Deployment
+
+This server is designed to be deployed on Railway with Docker support.
+
+## Environment Variables
+
+- `PORT` - Server port (default: 3001)
 
 ## Requirements
 
@@ -41,102 +70,6 @@ npm start
 ```
 
 The API will be available at `http://localhost:3001`
-
-## API Endpoints
-
-### Health Check
-```
-GET /health
-```
-
-### Compile LaTeX to PDF (JSON)
-```
-POST /compile
-Content-Type: application/json
-
-{
-  "latex": "\\documentclass{article}\\begin{document}Hello World!\\end{document}",
-  "filename": "my-document"
-}
-```
-
-### Compile LaTeX to PDF (Form Data)
-```
-POST /compile-form
-Content-Type: application/x-www-form-urlencoded
-
-latex=\documentclass{article}\begin{document}Hello World!\end{document}&filename=my-document
-```
-
-## Deployment
-
-### Deploy to Render
-
-1. Create a new Web Service on Render
-2. Connect your GitHub repository
-3. Set the following build settings:
-   - **Build Command**: `npm install && sudo apt-get update && sudo apt-get install -y texlive-full`
-   - **Start Command**: `npm start`
-   - **Environment**: Node
-
-### Deploy to Railway
-
-1. Create a new project on Railway
-2. Connect your GitHub repository
-3. Add the following to your `package.json`:
-```json
-{
-  "scripts": {
-    "postinstall": "apt-get update && apt-get install -y texlive-full"
-  }
-}
-```
-
-### Deploy to Heroku
-
-1. Create a new app on Heroku
-2. Add the TeX Live buildpack:
-```bash
-heroku buildpacks:add https://github.com/heroku/heroku-buildpack-tex.git
-heroku buildpacks:add heroku/nodejs
-```
-
-3. Deploy your app:
-```bash
-git push heroku main
-```
-
-## Usage in Your Next.js App
-
-Update your `generate-pdf` API route to use this service:
-
-```typescript
-// In your Next.js API route
-const response = await fetch('https://your-latex-api.onrender.com/compile', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  body: JSON.stringify({
-    latex: latexContent,
-    filename: 'cover-letter'
-  }),
-});
-
-if (response.ok) {
-  const pdfBuffer = await response.arrayBuffer();
-  return new NextResponse(pdfBuffer, {
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'attachment; filename="cover-letter.pdf"',
-    },
-  });
-}
-```
-
-## Environment Variables
-
-- `PORT`: Server port (default: 3001)
 
 ## Error Handling
 

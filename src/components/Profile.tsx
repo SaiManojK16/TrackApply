@@ -40,8 +40,7 @@ function stringAvatar(name) {
 
 const ProfileDialog = ({ open, onClose, user, onProfileUpdate }) => {
   const [formData, setFormData] = useState({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
+    fullName: user?.fullName || '',
     email: user?.email || '',
     phone: user?.phone || '',
     linkedin: user?.linkedin || '',
@@ -57,16 +56,17 @@ const ProfileDialog = ({ open, onClose, user, onProfileUpdate }) => {
   const theme = useTheme();
 
   useEffect(() => {
-    setFormData({
-      firstName: user?.firstName || '',
-      lastName: user?.lastName || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
-      linkedin: user?.linkedin || '',
-      github: user?.github || '',
-      portfolio: user?.portfolio || '',
-      accessKey: ''
-    });
+    if (user) {
+      setFormData({
+        fullName: user.fullName || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        linkedin: user.linkedin || '',
+        github: user.github || '',
+        portfolio: user.portfolio || '',
+        accessKey: ''
+      });
+    }
   }, [user, open]);
 
   const handleInputChange = (e) => {
@@ -84,7 +84,7 @@ const ProfileDialog = ({ open, onClose, user, onProfileUpdate }) => {
       if (formData.accessKey) {
         if (formData.accessKey === '16092001') {
           // Valid key - unlock unlimited access
-          const unlockResponse = await axios.post('http://localhost:5001/api/auth/unlock-access', 
+          const unlockResponse = await axios.post('/api/auth/unlock-access', 
             { accessKey: formData.accessKey }, 
             { headers: { Authorization: `Bearer ${token}` } }
           );
@@ -105,7 +105,7 @@ const ProfileDialog = ({ open, onClose, user, onProfileUpdate }) => {
       
       // Update profile with other data (excluding accessKey)
       const { accessKey, ...profileData } = formData;
-      const response = await axios.put('http://localhost:5001/api/auth/profile', profileData, {
+      const response = await axios.put('/api/auth/profile', profileData, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -135,7 +135,7 @@ const ProfileDialog = ({ open, onClose, user, onProfileUpdate }) => {
       const formDataData = new FormData();
       formDataData.append('resume', file);
       const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:5001/api/auth/upload-resume', formDataData, {
+      const response = await axios.post('/api/auth/upload-resume', formDataData, {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
       });
       localStorage.setItem('user', JSON.stringify(response.data.user));
@@ -185,11 +185,11 @@ const ProfileDialog = ({ open, onClose, user, onProfileUpdate }) => {
                 border: '3px solid rgba(255, 255, 255, 0.3)'
               }}
             >
-              {stringAvatar(`${formData.firstName} ${formData.lastName}`)}
+              {stringAvatar(`${formData.fullName}`)}
             </Avatar>
             <Box>
               <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-                {formData.firstName || 'Your'} {formData.lastName || 'Profile'}
+                {formData.fullName || 'Your'} Profile
               </Typography>
               <Typography variant="body1" sx={{ opacity: 0.9 }}>
                 {formData.email || 'Update your TrackApply profile'}
@@ -226,20 +226,9 @@ const ProfileDialog = ({ open, onClose, user, onProfileUpdate }) => {
                 <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
-                    label="First Name"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleInputChange}
-                    required
-                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Last Name"
-                    name="lastName"
-                    value={formData.lastName}
+                    label="Full Name"
+                    name="fullName"
+                    value={formData.fullName}
                     onChange={handleInputChange}
                     required
                     sx={{ '& .MuiOutlinedInput-root': { borderRadius: 2 } }}

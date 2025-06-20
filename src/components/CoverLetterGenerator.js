@@ -1,38 +1,64 @@
+/**
+ * Cover Letter Generator Component
+ * 
+ * This component follows standardized formatting rules:
+ * 
+ * 📄 STRUCTURE:
+ * - Header: Name (12px, bold), Contact Info (12px, normal), Date (12px)
+ * - Company Info: Company Name (12px, normal)
+ * - Subject: "Application for [Position]" (12px, bold)
+ * - Greeting: "Dear Hiring Manager," (12px, normal)
+ * - Body: 2-3 paragraphs (12px, normal, 80-100 words each)
+ * - Closing: "Sincerely," (12px, normal) + Signature (12px, normal)
+ * 
+ * ✒️ CONTENT RULES:
+ * - Max 3 paragraphs
+ * - No custom headers
+ * - Simple • bullet points only (max 3 total)
+ * - Professional tone, first person
+ * - Portfolio shown as domain only (e.g., "saimanojkartala.space")
+ * - No LinkedIn/GitHub labels
+ * 
+ * 🎨 STYLING RULES:
+ * - Font: Times New Roman (HTML), Helvetica (PDF)
+ * - Size: 12px throughout (except name and subject are bold)
+ * - Layout: Single-column, left-aligned
+ * - Colors: Black/dark gray only
+ * - No images, logos, or visual elements
+ */
+
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
+  Box,
   Container,
   Typography,
   TextField,
   Button,
-  Box,
-  Paper,
-  Grid,
-  Alert,
-  useTheme,
-  alpha,
-  CircularProgress,
   Card,
   CardContent,
+  Grid,
   Divider,
   Chip,
+  Alert,
+  CircularProgress,
+  Menu,
+  MenuItem,
+  Snackbar,
+  alpha,
+  useTheme
 } from '@mui/material';
-import { 
+import {
   Description as DescriptionIcon,
-  Upload as UploadFileIcon,
-  CheckCircle as CheckCircleIcon,
-  CloudUpload as CloudUploadIcon,
-  Visibility as VisibilityIcon,
-  Download as DownloadIcon,
-  Code as CodeIcon,
-  PictureAsPdf as PdfIcon,
   Work as WorkIcon,
-  Business as BusinessIcon
+  CloudUpload as CloudUploadIcon,
+  Download as DownloadIcon,
+  Visibility as VisibilityIcon,
+  Code as CodeIcon,
+  MoreVert as MoreVertIcon
 } from '@mui/icons-material';
-import { Snackbar, Alert as MuiAlert } from '@mui/material';
 import axios from 'axios';
-import jsPDF from 'jspdf';
 
 const placeholderAvatar = 'https://www.w3schools.com/howto/img_avatar.png';
 
@@ -47,15 +73,15 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
   });
   const [loading, setLoading] = useState(false);
   const [coverLetter, setCoverLetter] = useState('');
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [formattedPreview, setFormattedPreview] = useState('');
   const [error, setError] = useState('');
-  const [pdfLoading, setPdfLoading] = useState(false);
   const [showLatex, setShowLatex] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null);
+  const fileInputRef = useRef(null);
 
   const theme = useTheme();
-  const fileInputRef = useRef(null);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -69,28 +95,6 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Check generation limit for users without unlimited access
-    if (user && !user.hasUnlimitedAccess) {
-      const generationCount = user.generationCount || 0;
-      if (generationCount >= 3) {
-        setError('You have reached the free generation limit (3/3). Please enter your access key in the Profile section to continue generating cover letters.');
-        return;
-      }
-    }
-
-    // Validate required fields
-    if (!formData.jobTitle || !formData.companyName || !formData.jobDescription) {
-      setError('Please fill in all required job information fields.');
-      return;
-    }
-
-    // Check if user has resume data or provided resume
-    if (!user?.resumeData && !formData.resumeFile && !formData.resumeText) {
-      setError('Please upload a resume or paste resume text, or complete your profile with resume information.');
-      return;
-    }
-
     setLoading(true);
     setError('');
 
@@ -109,61 +113,14 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
 
       const response = await axios.post('/api/generate-cover-letter', requestData);
       
-      console.log('Cover letter response:', response.data);
-      
       if (response.data.coverLetterLatex) {
         setCoverLetter(response.data.coverLetterLatex);
-        console.log('Cover letter set:', response.data.coverLetterLatex.substring(0, 200) + '...');
-        
-        // Increment generation count for users without unlimited access
-        if (user && !user.hasUnlimitedAccess) {
-          const updatedUser = { 
-            ...user, 
-            generationCount: (user.generationCount || 0) + 1 
-          };
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-          if (onUserUpdate) onUserUpdate(updatedUser);
-        }
         
         // Generate PDF preview
-        try {
-          setPdfLoading(true);
-          
-          // Call the API to get structured content for preview
-          const previewResponse = await axios.post('/api/generate-pdf', {
-            latexContent: response.data.coverLetterLatex,
-            filename: 'preview'
-          });
-          
-          if (previewResponse.data.success && previewResponse.data.structuredContent) {
-            const content = previewResponse.data.structuredContent;
-            
-            // Generate formatted preview HTML from structured content
-            const previewHTML = generatePreviewFromStructuredContent(content);
-            setFormattedPreview(previewHTML);
-            
-            console.log('Preview generated successfully from structured content');
-          } else {
-            // Fallback to old method
-            const previewHTML = generatePreviewFromLatex(response.data.coverLetterLatex);
-            setFormattedPreview(previewHTML);
-            console.warn('Using fallback preview generation');
-          }
-        } catch (pdfError) {
-          console.error('Preview generation failed:', pdfError);
-          // Fallback to old method
-          try {
-            const previewHTML = generatePreviewFromLatex(response.data.coverLetterLatex);
-            setFormattedPreview(previewHTML);
-          } catch (fallbackError) {
-            console.error('Fallback preview also failed:', fallbackError);
-            setError('Failed to generate preview');
-          }
-        } finally {
-          setPdfLoading(false);
-        }
+        await generatePdfPreview(response.data.coverLetterLatex);
+        
+        setSnackbar({ open: true, message: 'Cover letter generated successfully!', severity: 'success' });
       } else {
-        console.error('No coverLetterLatex in response:', response.data);
         setError(response.data.error || 'Failed to generate cover letter');
       }
     } catch (error) {
@@ -174,558 +131,196 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
     }
   };
 
+  const generatePdfPreview = async (latexContent) => {
+    try {
+      const response = await axios.post('https://latex-pdf-api-production.up.railway.app/compile', {
+        latex: latexContent,
+        filename: 'cover-letter'
+      }, {
+        responseType: 'blob'
+      });
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      setPdfPreviewUrl(url);
+    } catch (error) {
+      console.error('PDF preview generation failed:', error);
+      // Don't show error for preview generation
+    }
+  };
+
   const handleDownload = async () => {
-    if (coverLetter) {
-      try {
-        setPdfLoading(true);
-        
-        // Call the API to get structured content
-        const response = await axios.post('/api/generate-pdf', {
-          latexContent: coverLetter,
-          filename: `cover-letter-${formData.companyName || 'document'}`
-        });
-        
-        if (response.data.success && response.data.structuredContent) {
-          const content = response.data.structuredContent;
-          
-          // Generate PDF with structured content
-          const pdf = new jsPDF();
-          const pageWidth = pdf.internal.pageSize.getWidth();
-          const margin = 20;
-          const maxWidth = pageWidth - (2 * margin);
-          
-          let yPosition = 30;
-          const lineHeight = 7;
-          
-          // Add personal information
-          if (content.personalInfo.name) {
-            pdf.setFontSize(14);
-            pdf.setFont('helvetica', 'bold');
-            const nameLines = pdf.splitTextToSize(content.personalInfo.name, maxWidth);
-            for (let line of nameLines) {
-              pdf.text(line, margin, yPosition);
-              yPosition += lineHeight;
-            }
-            yPosition += lineHeight;
-          }
-          
-          // Add contact information
-          pdf.setFontSize(10);
-          pdf.setFont('helvetica', 'normal');
-          const contactInfo = [
-            content.personalInfo.email,
-            content.personalInfo.phone,
-            content.personalInfo.linkedin ? `LinkedIn: ${content.personalInfo.linkedin}` : '',
-            content.personalInfo.github ? `GitHub: ${content.personalInfo.github}` : '',
-            content.personalInfo.portfolio ? `Portfolio: ${content.personalInfo.portfolio}` : ''
-          ].filter(Boolean);
-          
-          for (let info of contactInfo) {
-            pdf.text(info, margin, yPosition);
-            yPosition += lineHeight;
-          }
-          
-          yPosition += lineHeight * 2;
-          
-          // Add date
-          if (content.date) {
-            pdf.text(content.date, margin, yPosition);
-            yPosition += lineHeight * 2;
-          }
-          
-          // Add hiring manager and company
-          if (content.hiringManager || content.company) {
-            if (content.hiringManager) {
-              pdf.text(content.hiringManager, margin, yPosition);
-              yPosition += lineHeight;
-            }
-            if (content.company) {
-              pdf.text(content.company, margin, yPosition);
-              yPosition += lineHeight;
-            }
-            yPosition += lineHeight;
-          }
-          
-          // Add subject
-          if (content.subject) {
-            pdf.setFontSize(12);
-            pdf.setFont('helvetica', 'bold');
-            const subjectLines = pdf.splitTextToSize(content.subject, maxWidth);
-            for (let line of subjectLines) {
-              pdf.text(line, margin, yPosition);
-              yPosition += lineHeight;
-            }
-            yPosition += lineHeight * 2;
-          }
-          
-          // Add greeting
-          if (content.greeting) {
-            pdf.setFontSize(11);
-            pdf.setFont('helvetica', 'normal');
-            pdf.text(content.greeting, margin, yPosition);
-            yPosition += lineHeight * 2;
-          }
-          
-          // Add body
-          if (content.body) {
-            pdf.setFontSize(11);
-            pdf.setFont('helvetica', 'normal');
-            const bodyLines = pdf.splitTextToSize(content.body, maxWidth);
-            for (let line of bodyLines) {
-              if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
-                pdf.addPage();
-                yPosition = 20;
-              }
-              pdf.text(line, margin, yPosition);
-              yPosition += lineHeight;
-            }
-            yPosition += lineHeight * 2;
-          }
-          
-          // Add closing
-          if (content.closing) {
-            pdf.setFontSize(11);
-            pdf.setFont('helvetica', 'normal');
-            const closingLines = pdf.splitTextToSize(content.closing, maxWidth);
-            for (let line of closingLines) {
-              if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
-                pdf.addPage();
-                yPosition = 20;
-              }
-              pdf.text(line, margin, yPosition);
-              yPosition += lineHeight;
-            }
-          }
-          
-          // Download the PDF
-          const filename = `cover-letter-${formData.companyName || 'document'}.pdf`;
-          pdf.save(filename);
-          
-          setSnackbar({
-            open: true,
-            message: 'Cover letter downloaded successfully!',
-            severity: 'success'
-          });
-        } else {
-          throw new Error('Failed to get structured content from API');
-        }
-      } catch (error) {
-        console.error('Download failed:', error);
-        setSnackbar({
-          open: true,
-          message: 'Failed to download cover letter',
-          severity: 'error'
-        });
-      } finally {
-        setPdfLoading(false);
-      }
+    if (!coverLetter) {
+      setSnackbar({ open: true, message: 'No cover letter to download', severity: 'error' });
+      return;
     }
-  };
 
-  const handleReset = () => {
-    setFormData({
-      companyName: '',
-      jobTitle: '',
-      jobDescription: '',
-      resumeFile: null,
-      resumeText: '',
-      userInstructions: '',
-    });
-    setCoverLetter('');
-    setPreviewUrl('');
-    setFormattedPreview('');
-    setError('');
-    setShowLatex(false);
-  };
-
-  // Function to convert LaTeX content to PDF
-  const generatePDFFromLatex = (latexContent) => {
     try {
-      console.log('=== PDF GENERATION START ===');
-      console.log('Original LaTeX content length:', latexContent.length);
-      
-      // Extract content directly from LaTeX template structure
-      const extractedContent = extractContentFromLatex(latexContent);
-      console.log('Extracted content:', extractedContent);
-      
-      if (!extractedContent) {
-        console.error('Failed to extract content from LaTeX');
-        return null;
-      }
-      
-      // Create PDF with extracted content
-      const pdf = new jsPDF();
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const margin = 20;
-      const maxWidth = pageWidth - (2 * margin);
-      
-      let yPosition = 30;
-      const lineHeight = 7;
-      
-      // Add personal information
-      if (extractedContent.name) {
-        pdf.setFontSize(14);
-        pdf.setFont('helvetica', 'bold');
-        const nameLines = pdf.splitTextToSize(extractedContent.name, maxWidth);
-        for (let line of nameLines) {
-          pdf.text(line, margin, yPosition);
-          yPosition += lineHeight;
-        }
-        yPosition += lineHeight;
-      }
-      
-      // Add contact information
-      pdf.setFontSize(10);
-      pdf.setFont('helvetica', 'normal');
-      const contactInfo = [
-        extractedContent.email,
-        extractedContent.phone,
-        extractedContent.linkedin ? `LinkedIn: ${extractedContent.linkedin}` : '',
-        extractedContent.github ? `GitHub: ${extractedContent.github}` : '',
-        extractedContent.portfolio ? `Portfolio: ${extractedContent.portfolio}` : ''
-      ].filter(Boolean);
-      
-      for (let info of contactInfo) {
-        pdf.text(info, margin, yPosition);
-        yPosition += lineHeight;
-      }
-      
-      yPosition += lineHeight * 2;
-      
-      // Add date
-      if (extractedContent.date) {
-        pdf.text(extractedContent.date, margin, yPosition);
-        yPosition += lineHeight * 2;
-      }
-      
-      // Add hiring manager and company
-      if (extractedContent.hiringManager || extractedContent.company) {
-        if (extractedContent.hiringManager) {
-          pdf.text(extractedContent.hiringManager, margin, yPosition);
-          yPosition += lineHeight;
-        }
-        if (extractedContent.company) {
-          pdf.text(extractedContent.company, margin, yPosition);
-          yPosition += lineHeight;
-        }
-        yPosition += lineHeight;
-      }
-      
-      // Add subject
-      if (extractedContent.subject) {
-        pdf.setFontSize(12);
-        pdf.setFont('helvetica', 'bold');
-        const subjectLines = pdf.splitTextToSize(extractedContent.subject, maxWidth);
-        for (let line of subjectLines) {
-          pdf.text(line, margin, yPosition);
-          yPosition += lineHeight;
-        }
-        yPosition += lineHeight * 2;
-      }
-      
-      // Add greeting
-      if (extractedContent.greeting) {
-        pdf.setFontSize(11);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(extractedContent.greeting, margin, yPosition);
-        yPosition += lineHeight * 2;
-      }
-      
-      // Add body
-      if (extractedContent.body) {
-        pdf.setFontSize(11);
-        pdf.setFont('helvetica', 'normal');
-        const bodyLines = pdf.splitTextToSize(extractedContent.body, maxWidth);
-        for (let line of bodyLines) {
-          if (yPosition > pdf.internal.pageSize.getHeight() - 20) {
-            pdf.addPage();
-            yPosition = 20;
-          }
-          pdf.text(line, margin, yPosition);
-          yPosition += lineHeight;
-        }
-        yPosition += lineHeight * 2;
-      }
-      
-      // Add closing
-      if (extractedContent.closing) {
-        pdf.setFontSize(11);
-        pdf.setFont('helvetica', 'normal');
-        const closingLines = pdf.splitTextToSize(extractedContent.closing, maxWidth);
-        for (let line of closingLines) {
-          pdf.text(line, margin, yPosition);
-          yPosition += lineHeight;
-        }
-      }
-      
-      // Generate PDF blob
-      const pdfBlob = pdf.output('blob');
-      const pdfUrl = URL.createObjectURL(pdfBlob);
-      
-      console.log('PDF generated successfully, URL:', pdfUrl);
-      console.log('=== PDF GENERATION END ===');
-      return pdfUrl;
+      // Send LaTeX to Railway API for PDF generation
+      const response = await axios.post('https://latex-pdf-api-production.up.railway.app/compile', {
+        latex: coverLetter,
+        filename: 'cover-letter'
+      }, {
+        responseType: 'blob'
+      });
+
+      // Trigger download
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `cover-letter-${formData.companyName || 'company'}-${formData.jobTitle || 'position'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setSnackbar({ open: true, message: 'PDF generated and downloaded successfully!', severity: 'success' });
     } catch (error) {
-      console.error('Error generating PDF from LaTeX:', error);
-      return null;
+      console.error('PDF generation error:', error);
+      setSnackbar({ open: true, message: 'Failed to generate PDF', severity: 'error' });
     }
   };
 
-  // Function to extract content directly from LaTeX template
-  const extractContentFromLatex = (latexContent) => {
-    try {
-      console.log('=== CONTENT EXTRACTION START ===');
-      console.log('LaTeX content to extract from:', latexContent.substring(0, 500));
-      
-      // Extract content using regex patterns based on our LaTeX template structure
-      const content = {};
-      
-      // Extract name from \textbf{{Name}}
-      const nameMatch = latexContent.match(/\\textbf\{\{\{Name\}\}\}/);
-      if (nameMatch) {
-        // Find the actual name value in the template
-        const nameValueMatch = latexContent.match(/\\textbf\{([^}]+)\}/);
-        content.name = nameValueMatch ? nameValueMatch[1] : '';
-      }
-      
-      // Extract email from {{Email}}
-      const emailMatch = latexContent.match(/\{\{\{Email\}\}\}/);
-      if (emailMatch) {
-        // Find the actual email value
-        const emailValueMatch = latexContent.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-        content.email = emailValueMatch ? emailValueMatch[1] : '';
-      }
-      
-      // Extract phone from {{Phone}}
-      const phoneMatch = latexContent.match(/\{\{\{Phone\}\}\}/);
-      if (phoneMatch) {
-        // Find the actual phone value
-        const phoneValueMatch = latexContent.match(/(\d{10,})/);
-        content.phone = phoneValueMatch ? phoneValueMatch[1] : '';
-      }
-      
-      // Extract LinkedIn from {{LinkedIn}}
-      const linkedinMatch = latexContent.match(/\{\{\{LinkedIn\}\}\}/);
-      if (linkedinMatch) {
-        // Find the actual LinkedIn value
-        const linkedinValueMatch = latexContent.match(/(https?:\/\/[^\s]+linkedin[^\s]*)/i);
-        content.linkedin = linkedinValueMatch ? linkedinValueMatch[1] : '';
-      }
-      
-      // Extract GitHub from {{GitHub}}
-      const githubMatch = latexContent.match(/\{\{\{GitHub\}\}\}/);
-      if (githubMatch) {
-        // Find the actual GitHub value
-        const githubValueMatch = latexContent.match(/(https?:\/\/[^\s]+github[^\s]*)/i);
-        content.github = githubValueMatch ? githubValueMatch[1] : '';
-      }
-      
-      // Extract Portfolio from {{Portfolio}}
-      const portfolioMatch = latexContent.match(/\{\{\{Portfolio\}\}\}/);
-      if (portfolioMatch) {
-        // Find the actual portfolio value
-        const portfolioValueMatch = latexContent.match(/(https?:\/\/[^\s]+)/);
-        content.portfolio = portfolioValueMatch ? portfolioValueMatch[1] : '';
-      }
-      
-      // Extract date from {{Date}}
-      const dateMatch = latexContent.match(/\{\{\{Date\}\}\}/);
-      if (dateMatch) {
-        // Find the actual date value
-        const dateValueMatch = latexContent.match(/([A-Za-z]+\s+\d{1,2},\s+\d{4})/);
-        content.date = dateValueMatch ? dateValueMatch[1] : '';
-      }
-      
-      // Extract hiring manager from {{HiringManager}}
-      const hiringManagerMatch = latexContent.match(/\{\{\{HiringManager\}\}\}/);
-      if (hiringManagerMatch) {
-        content.hiringManager = 'Hiring Manager';
-      }
-      
-      // Extract company from {{Company}}
-      const companyMatch = latexContent.match(/\{\{\{Company\}\}\}/);
-      if (companyMatch) {
-        // Find the actual company value
-        const companyValueMatch = latexContent.match(/Position at ([^}]+)/);
-        content.company = companyValueMatch ? companyValueMatch[1] : '';
-      }
-      
-      // Extract position from {{Position}}
-      const positionMatch = latexContent.match(/\{\{\{Position\}\}\}/);
-      if (positionMatch) {
-        // Find the actual position value
-        const positionValueMatch = latexContent.match(/Application for ([^}]+) Position/);
-        content.position = positionValueMatch ? positionValueMatch[1] : '';
-      }
-      
-      // Extract subject
-      const subjectMatch = latexContent.match(/Application for ([^}]+) Position at ([^}]+)/);
-      if (subjectMatch) {
-        content.subject = `Application for ${subjectMatch[1]} Position at ${subjectMatch[2]}`;
-      }
-      
-      // Extract greeting
-      const greetingMatch = latexContent.match(/Dear ([^,]+),/);
-      if (greetingMatch) {
-        content.greeting = `Dear ${greetingMatch[1]},`;
-      }
-      
-      // Extract body from {{BodyParagraphs}}
-      const bodyMatch = latexContent.match(/\{\{\{BodyParagraphs\}\}\}/);
-      if (bodyMatch) {
-        // Find the actual body content
-        const bodyContentMatch = latexContent.match(/Dear[^}]*\},\s*\n\s*\n([\s\S]*?)\s*\n\s*Sincerely/);
-        if (bodyContentMatch) {
-          content.body = bodyContentMatch[1].replace(/\\\\(?!\\)/g, '\n').replace(/\\\\/g, '\n').trim();
-        }
-      }
-      
-      // Extract closing
-      const closingMatch = latexContent.match(/Sincerely,\\\\\\([^}]+)/);
-      if (closingMatch) {
-        content.closing = `Sincerely,\n${closingMatch[1]}`;
-      }
-      
-      console.log('Extracted content:', content);
-      console.log('=== CONTENT EXTRACTION END ===');
-      return content;
-    } catch (error) {
-      console.error('Error extracting content from LaTeX:', error);
-      return null;
+  const handleDownloadMenuOpen = (event) => {
+    setDownloadMenuAnchor(event.currentTarget);
+  };
+
+  const handleDownloadMenuClose = () => {
+    setDownloadMenuAnchor(null);
+  };
+
+  const handleDownloadFormat = async (format) => {
+    setDownloadMenuAnchor(null);
+    
+    if (format === 'pdf') {
+      await handleDownload();
     }
   };
 
-  // Function to generate preview from LaTeX content
-  const generatePreviewFromLatex = (latexContent) => {
-    try {
-      console.log('=== PREVIEW GENERATION START ===');
-      
-      // Extract content using the same function
-      const extractedContent = extractContentFromLatex(latexContent);
-      console.log('Preview extracted content:', extractedContent);
-      
-      if (!extractedContent) {
-        return '<div style="color: red;">Error extracting content from LaTeX</div>';
-      }
-      
-      // Generate formatted preview HTML
-      let previewHTML = '<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; background: white;">';
-      
-      // Add personal information
-      if (extractedContent.name) {
-        previewHTML += `<div style="margin-bottom: 20px;">
-          <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">${extractedContent.name}</div>
-          <div style="font-size: 12px; color: #666;">`;
-        
-        if (extractedContent.email) previewHTML += `<div>${extractedContent.email}</div>`;
-        if (extractedContent.phone) previewHTML += `<div>${extractedContent.phone}</div>`;
-        if (extractedContent.linkedin) previewHTML += `<div>LinkedIn: ${extractedContent.linkedin}</div>`;
-        if (extractedContent.github) previewHTML += `<div>GitHub: ${extractedContent.github}</div>`;
-        if (extractedContent.portfolio) previewHTML += `<div>Portfolio: ${extractedContent.portfolio}</div>`;
-        
-        previewHTML += `</div></div>`;
-      }
-      
-      // Add date
-      if (extractedContent.date) {
-        previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">${extractedContent.date}</div>`;
-      }
-      
-      // Add hiring manager and company
-      if (extractedContent.hiringManager || extractedContent.company) {
-        previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">`;
-        if (extractedContent.hiringManager) previewHTML += `<div>${extractedContent.hiringManager}</div>`;
-        if (extractedContent.company) previewHTML += `<div>${extractedContent.company}</div>`;
-        previewHTML += `</div>`;
-      }
-      
-      // Add subject
-      if (extractedContent.subject) {
-        previewHTML += `<div style="margin-bottom: 20px; font-weight: bold; font-size: 14px;">${extractedContent.subject}</div>`;
-      }
-      
-      // Add greeting
-      if (extractedContent.greeting) {
-        previewHTML += `<div style="margin-bottom: 20px;">${extractedContent.greeting}</div>`;
-      }
-      
-      // Add body
-      if (extractedContent.body) {
-        previewHTML += `<div style="margin-bottom: 20px; text-align: justify;">${extractedContent.body.replace(/\n/g, '<br>')}</div>`;
-      }
-      
-      // Add closing
-      if (extractedContent.closing) {
-        previewHTML += `<div style="margin-top: 20px;">${extractedContent.closing.replace(/\n/g, '<br>')}</div>`;
-      }
-      
-      previewHTML += '</div>';
-      
-      console.log('Preview HTML generated successfully');
-      console.log('=== PREVIEW GENERATION END ===');
-      return previewHTML;
-    } catch (error) {
-      console.error('Error generating preview from LaTeX:', error);
-      return '<div style="color: red;">Error generating preview</div>';
+  // Function to extract and format text from LaTeX for preview
+  const extractTextFromLatex = (latexContent) => {
+    if (!latexContent) return '';
+    
+    let text = latexContent;
+    
+    // Remove LaTeX document structure and packages
+    text = text.replace(/\\documentclass[^}]*}/g, '');
+    text = text.replace(/\\usepackage[^}]*}/g, '');
+    text = text.replace(/\\begin\{document\}/g, '');
+    text = text.replace(/\\end\{document\}/g, '');
+    text = text.replace(/\\[a-zA-Z]+\[[^\]]*\]/g, '');
+    
+    // Extract name (first \textbf{} after % Personal Information)
+    const nameMatch = text.match(/\\textbf\{([^}]*)\}/);
+    const name = nameMatch ? nameMatch[1] : '';
+    
+    // Extract email (look for email pattern)
+    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    const email = emailMatch ? emailMatch[1] : '';
+    
+    // Extract phone (look for phone pattern)
+    const phoneMatch = text.match(/(\d{10,})/);
+    const phone = phoneMatch ? phoneMatch[1] : '';
+    
+    // Extract LinkedIn, GitHub, Portfolio links - only show link text, not URLs
+    const linkedinMatch = text.match(/LinkedIn:\s*\\href\{([^}]*)\}\{([^}]*)\}/);
+    const linkedin = linkedinMatch ? linkedinMatch[2] : '';
+    
+    const githubMatch = text.match(/GitHub:\s*\\href\{([^}]*)\}\{([^}]*)\}/);
+    const github = githubMatch ? githubMatch[2] : '';
+    
+    const portfolioMatch = text.match(/Portfolio:\s*\\href\{([^}]*)\}\{([^}]*)\}/);
+    const portfolio = portfolioMatch ? portfolioMatch[2] : '';
+    
+    // Extract date
+    const dateMatch = text.match(/([A-Za-z]+ \d{1,2}, \d{4})/);
+    const date = dateMatch ? dateMatch[1] : '';
+    
+    // Extract company (look for company after date)
+    const companyMatch = text.match(/\\textbf\{([^}]*)\}\s*\\textbf\{([^}]*)\}/);
+    const company = companyMatch ? companyMatch[2] : '';
+    
+    // Extract subject
+    const subjectMatch = text.match(/\\textbf\{Subject: ([^}]*)\}/);
+    const subject = subjectMatch ? subjectMatch[1] : '';
+    
+    // Extract greeting
+    const greetingMatch = text.match(/Dear ([^,]+),/);
+    const greeting = greetingMatch ? `Dear ${greetingMatch[1]},` : 'Dear Hiring Manager,';
+    
+    // Extract body content (everything between greeting and closing)
+    const bodyStart = text.indexOf(greeting) + greeting.length;
+    const closingStart = text.indexOf('Sincerely,');
+    let body = '';
+    
+    if (bodyStart > 0 && closingStart > bodyStart) {
+      body = text.substring(bodyStart, closingStart);
+    } else {
+      // Fallback: extract everything after greeting
+      body = text.substring(bodyStart);
     }
+    
+    // Clean up body text
+    body = body
+      .replace(/\\textbf\{([^}]*)\}/g, '$1')
+      .replace(/\\href\{[^}]*\}\{([^}]*)\}/g, '$1')
+      .replace(/\\\\/g, '\n')
+      .replace(/\n\s*\n/g, '\n\n')
+      .replace(/^\s+|\s+$/g, '') // Trim whitespace
+      .trim();
+    
+    // Build formatted preview with proper line breaks and no tab spaces
+    let formattedPreview = '';
+    
+    // Header with name in bold
+    if (name) {
+      formattedPreview += `**${name}**\n`;
+    }
+    
+    // Contact information - each on separate line, no tab spaces
+    if (email) formattedPreview += `${email}\n`;
+    if (phone) formattedPreview += `${phone}\n`;
+    if (linkedin) formattedPreview += `LinkedIn: [LinkedIn](${linkedin})\n`;
+    if (github) formattedPreview += `GitHub: [GitHub](${github})\n`;
+    if (portfolio) formattedPreview += `Portfolio: [Portfolio](${portfolio})\n`;
+    
+    // Add spacing after contact info
+    formattedPreview += '\n';
+    
+    // Date
+    if (date) {
+      formattedPreview += `${date}\n\n`;
+    }
+    
+    // Company info - each on separate line, no tab spaces
+    if (company) {
+      formattedPreview += `Hiring Manager\n${company}\n\n`;
+    }
+    
+    // Subject in bold
+    if (subject) {
+      formattedPreview += `**Subject: ${subject}**\n\n`;
+    }
+    
+    // Greeting
+    formattedPreview += `${greeting}\n\n`;
+    
+    // Body
+    formattedPreview += `${body}\n\n`;
+    
+    // Closing with name on separate line, no tab spaces
+    formattedPreview += `Sincerely,\n${name}`;
+    
+    return formattedPreview;
   };
 
-  // Function to generate preview from structured content
-  const generatePreviewFromStructuredContent = (content) => {
-    let previewHTML = '<div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; background: white;">';
-    
-    // Add personal information
-    if (content.personalInfo.name) {
-      previewHTML += `<div style="margin-bottom: 20px;">
-        <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px;">${content.personalInfo.name}</div>
-        <div style="font-size: 12px; color: #666;">`;
-      
-      if (content.personalInfo.email) previewHTML += `<div>${content.personalInfo.email}</div>`;
-      if (content.personalInfo.phone) previewHTML += `<div>${content.personalInfo.phone}</div>`;
-      if (content.personalInfo.linkedin) previewHTML += `<div>LinkedIn: ${content.personalInfo.linkedin}</div>`;
-      if (content.personalInfo.github) previewHTML += `<div>GitHub: ${content.personalInfo.github}</div>`;
-      if (content.personalInfo.portfolio) previewHTML += `<div>Portfolio: ${content.personalInfo.portfolio}</div>`;
-      
-      previewHTML += `</div></div>`;
-    }
-    
-    // Add date
-    if (content.date) {
-      previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">${content.date}</div>`;
-    }
-    
-    // Add hiring manager and company
-    if (content.hiringManager || content.company) {
-      previewHTML += `<div style="margin-bottom: 20px; font-size: 12px;">`;
-      if (content.hiringManager) previewHTML += `<div>${content.hiringManager}</div>`;
-      if (content.company) previewHTML += `<div>${content.company}</div>`;
-      previewHTML += `</div>`;
-    }
-    
-    // Add subject
-    if (content.subject) {
-      previewHTML += `<div style="margin-bottom: 20px; font-weight: bold; font-size: 14px;">${content.subject}</div>`;
-    }
-    
-    // Add greeting
-    if (content.greeting) {
-      previewHTML += `<div style="margin-bottom: 20px;">${content.greeting}</div>`;
-    }
-    
-    // Add body
-    if (content.body) {
-      previewHTML += `<div style="margin-bottom: 20px; text-align: justify;">${content.body.replace(/\n/g, '<br>')}</div>`;
-    }
-    
-    // Add closing
-    if (content.closing) {
-      previewHTML += `<div style="margin-top: 20px;">${content.closing.replace(/\n/g, '<br>')}</div>`;
-    }
-    
-    previewHTML += '</div>';
-    
-    return previewHTML;
-  };
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
+        URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [pdfPreviewUrl]);
 
   return (
     <Box sx={{ 
@@ -1023,26 +618,6 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
                         'Generate Cover Letter'
                       )}
                     </Button>
-                    
-                    {coverLetter && (
-                      <Button
-                        variant="outlined"
-                        onClick={handleReset}
-                        size="large"
-                        sx={{
-                          px: 4,
-                          py: 1.5,
-                          borderRadius: 3,
-                          fontWeight: 600,
-                          borderWidth: 2,
-                          '&:hover': {
-                            borderWidth: 2,
-                          }
-                        }}
-                      >
-                        Start Over
-                      </Button>
-                    )}
                   </Box>
                 </form>
               </CardContent>
@@ -1062,35 +637,56 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
                       Your generated cover letter will appear here
                     </Typography>
                   </Box>
-                  
-                  {coverLetter && (
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button
-                        variant="outlined"
-                        size="small"
-                        onClick={() => setShowLatex(!showLatex)}
-                        startIcon={showLatex ? <VisibilityIcon /> : <CodeIcon />}
-                        sx={{ borderRadius: 2 }}
-                      >
-                        {showLatex ? 'View PDF' : 'View Code'}
-                      </Button>
-                      {coverLetter && (
-                        <Button
-                          variant="contained"
-                          size="small"
-                          onClick={handleDownload}
-                          startIcon={<DownloadIcon />}
-                          sx={{ borderRadius: 2 }}
-                        >
-                          Download
-                        </Button>
-                      )}
-                    </Box>
-                  )}
                 </Box>
 
                 {coverLetter ? (
                   <Box>
+                    <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          setShowLatex(false);
+                          setShowPdfPreview(false);
+                        }}
+                        sx={{ borderRadius: 2 }}
+                      >
+                        Text Preview
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          setShowLatex(false);
+                          setShowPdfPreview(true);
+                        }}
+                        startIcon={<VisibilityIcon />}
+                        sx={{ borderRadius: 2 }}
+                      >
+                        PDF Preview
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          setShowLatex(true);
+                          setShowPdfPreview(false);
+                        }}
+                        startIcon={<CodeIcon />}
+                        sx={{ borderRadius: 2 }}
+                      >
+                        View LaTeX
+                      </Button>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={handleDownload}
+                        sx={{ borderRadius: 2 }}
+                      >
+                        Download PDF
+                      </Button>
+                    </Box>
+                    
                     {showLatex ? (
                       <Box sx={{
                         backgroundColor: '#1e293b',
@@ -1109,43 +705,42 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
                           {coverLetter}
                         </pre>
                       </Box>
-                    ) : (
+                    ) : showPdfPreview && pdfPreviewUrl ? (
                       <Box sx={{
                         border: '1px solid #e5e7eb',
                         borderRadius: 2,
-                        overflow: 'hidden',
-                        backgroundColor: '#f8fafc'
+                        height: '600px',
+                        overflow: 'hidden'
                       }}>
-                        {pdfLoading ? (
-                          <Box sx={{ p: 4, textAlign: 'center' }}>
-                            <CircularProgress size={40} sx={{ mb: 2 }} />
-                            <Typography variant="body2" color="text.secondary">
-                              Generating preview...
-                            </Typography>
-                          </Box>
-                        ) : formattedPreview ? (
-                          <Box sx={{
-                            backgroundColor: 'white',
-                            minHeight: '600px',
-                            overflow: 'auto'
-                          }}>
-                            <div 
-                              dangerouslySetInnerHTML={{ __html: formattedPreview }}
-                              style={{
-                                padding: '20px',
-                                fontFamily: 'Arial, sans-serif'
-                              }}
-                            />
-                          </Box>
-                        ) : (
-                          <Box sx={{ p: 4, textAlign: 'center' }}>
-                            <PdfIcon sx={{ fontSize: 48, color: '#9ca3af', mb: 2 }} />
-                            <Typography variant="body2" color="text.secondary">
-                              Preview will appear here
-                            </Typography>
-                          </Box>
-                        )}
+                        <iframe
+                          src={pdfPreviewUrl}
+                          width="100%"
+                          height="100%"
+                          style={{ border: 'none' }}
+                          title="PDF Preview"
+                        />
                       </Box>
+                    ) : (
+                      <Box sx={{
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'Times New Roman, serif',
+                        fontSize: '14px',
+                        lineHeight: 1.6,
+                        '& a': {
+                          color: '#3b82f6',
+                          textDecoration: 'underline',
+                          cursor: 'pointer'
+                        },
+                        '& strong': {
+                          fontWeight: 'bold'
+                        }
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: extractTextFromLatex(coverLetter)
+                          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+                      }}
+                      />
                     )}
                   </Box>
                 ) : (
@@ -1175,9 +770,9 @@ const CoverLetterGenerator = ({ user, onUserUpdate }) => {
         autoHideDuration={6000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
       >
-        <MuiAlert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
           {snackbar.message}
-        </MuiAlert>
+        </Alert>
       </Snackbar>
     </Box>
   );
